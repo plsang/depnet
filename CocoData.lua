@@ -66,9 +66,24 @@ function CocoData:getBatch(opt)
     end
     
     self.iterator = idx
-    
+
+    -- subtract image mean
+    -- no longer needed, it is now pre-processed
+    -- image_mean = torch.FloatTensor{123.68, 116.779, 103.939}:view(1,3,1,1) -- in RGB order
+    -- image_mean = image_mean:typeAs(image_batch)
+    -- image_batch:add(-1, image_mean:expandAs(image_batch))
+
     local data = {}
     data.images = image_batch
     data.labels = label_batch
     return data
 end
+
+function CocoData:reset()
+    self.iterator = 1
+end
+
+function CocoData:getCurrentIndex()
+    return self.iterator
+end
+

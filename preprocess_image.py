@@ -8,7 +8,8 @@ import json
 import argparse
 import h5py
 import numpy as np
-from scipy.misc import imread, imresize
+#from scipy.misc import imread, imresize
+import cv2
 from random import shuffle, seed
 
 import logging
@@ -16,7 +17,25 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+def upsample_image(im, sz):
+    """
+    this function is copied from Gupta's code
+    Note: Caffe also supports function to resize an image in stretch mode, while this function does not stretch the image.
+    """
+    h = im.shape[0]
+    w = im.shape[1]
+    s = np.float(max(h, w))
+    I_out = np.zeros((sz, sz, 3), dtype = np.float)
+    I = cv2.resize(im, None, None, fx = np.float(sz)/s, fy = np.float(sz)/s, interpolation=cv2.INTER_LINEAR)
+    SZ = I.shape
+    I_out[0:I.shape[0], 0:I.shape[1],:] = I
+    return I_out, I, SZ
+
+
 def load_image(params):
+    
+    im_mean = np.array([[[ 103.939, 116.779, 123.68]]]) # in BGR order
+    
     data = json.load(open(params['input_json'], 'r'))
     
     # sort images by image id (acsending)
@@ -48,23 +67,29 @@ def load_image(params):
         img_id = sorted_imgs[shuffled_i][0]
         img_file = sorted_imgs[shuffled_i][1]
         
-        I = imread(os.path.join(params['images_root'], img_file))
+        # note that opencv read image in BGR order
+        im = cv2.imread(os.path.join(params['images_root'], img_file))
+        im = im.astype(np.float32, copy=True)
+        im -= im_mean
+        
         try:
-            I_rsz = imresize(I, (img_size, img_size))
+            #I_rsz = imresize(I, (img_size, img_size))
+            im_rsz = upsample_image(im, img_size)[0]
+            
         except:
             logger.info(' image not readable: %s. Generate random data', img_file)
             # generate random data
-            I_rsz = np.random.randint(np.iinfo(np.uint8).max, size=(img_size, img_size, 3))
+            im_rsz = np.random.randint(np.iinfo(np.uint8).max, size=(img_size, img_size, 3))
 
         # handle grayscale input images
-        if len(I_rsz.shape) == 2:
-            I_rsz = I_rsz[:,:,np.newaxis]
-            I_rsz = np.concatenate((I_rsz, I_rsz, I_rsz), axis=2)
+        if len(im_rsz.shape) == 2:
+            im_rsz = I_rsz[:,:,np.newaxis]
+            im_rsz = np.concatenate((im, im, im), axis=2)
         
         # swap order of axes from (w, h, c) -> (c, w, h)
-        I_rsz = I_rsz.transpose(2, 0, 1)
+        im_rsz = np.transpose(im_rsz, axes = (2, 0, 1))
         
-        images[i] = I_rsz
+        images[i] = im_rsz
         indexes[i] = img_id
         if i % 1000 == 0:
             logger.info('processing %d/%d (%.2f%% done)' % (i, num_images, i*100.0/num_images))
