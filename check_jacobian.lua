@@ -1,6 +1,7 @@
 require 'nn'
 require 'cudnn'
 require 'MultilabelNLLCriterion'
+require 'MultilabelCrossEntropyCriterion'
 
 
 -- NOTE: Assumes input and output to module are 1-dimensional, i.e. doesn't test the module
@@ -43,7 +44,6 @@ local function crit_check(crit, x, target, eps)
  
   local grad_est = torch.Tensor(grad:size()):cuda()
   for i = 1, grad:size(1) do
-    print(i)
     for j = 1, grad:size(2) do   
         -- Evaluate f twice, and put your estimate of df/dx_i into grad_est[i]
         x[i][j] = x[i][j] + eps
@@ -56,7 +56,7 @@ local function crit_check(crit, x, target, eps)
   end
   
   local diff = torch.norm(grad - grad_est) / torch.norm(grad + grad_est)
-  print(grad, grad_est)
+  print(torch.cat(grad, grad_est, 1))
   print(diff)
 end
 
@@ -68,11 +68,13 @@ torch.manualSeed(1)
 local model = nn.Sequential()
 model:add(nn.LogSoftMax())
 -- model:add(nn.MultilabelNLLCriterion())
-crit = nn.MultilabelNLLCriterion():cuda()
+-- crit = nn.MultilabelNLLCriterion():cuda()
+crit = nn.MultilabelCrossEntropyCriterion():cuda()
 
-local x = torch.randn(4,100):cuda() -- random input to layer
-local t = torch.rand(4,100):mul(2):floor():cuda()
-eps=1e-5
+local x = torch.rand(2,10):cuda() -- random input to layer
+local t = torch.rand(2,10):mul(2):floor():cuda()
+print(torch.cat(x, t, 1))
+eps=1e-6
 -- print(jacobian_wrt_input(model, x, 1e-7))
 crit_check(crit, x, t, eps)
 

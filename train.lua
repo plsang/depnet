@@ -29,13 +29,13 @@ cmd:option('-batch_size', 16, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
-cmd:option('-learning_rate', 1e-5, 'learning rate for sgd')
+cmd:option('-learning_rate', 1e-4, 'learning rate for sgd')
 cmd:option('-learning_rate_decay', 1e-6, 'learning rate for sgd')
 cmd:option('-momentum', 0.99, 'momentum for sgd')
 cmd:option('-weight_decay', 0.0005, 'momentum for sgd')
 cmd:option('-max_iters', 1000000)
 cmd:option('-save_cp_interval', 10000, 'to save a check point every interval number of iterations')
-cmd:option('-cp_path', 'cp', 'path to save checkpoints')
+cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
 cmd:text()
@@ -82,7 +82,7 @@ local function eval_loss()
         end
     end    
     
-    print ('eval loss = %.6f', total_loss/num_iters)
+    print ('eval loss = ', total_loss/eval_iters)
     vgg_model:training() -- back to the training mode
 end
 

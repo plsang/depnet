@@ -3,34 +3,35 @@ require 'cunn' -- otherwise, error: attempt to index field 'THNN' (a nil value)
 require 'cudnn'
 require 'loadcaffe'
 require 'MultilabelNLLCriterion'
+require 'MultilabelCrossEntropyCriterion'
 
 local model_utils = {}
 
 function model_utils.load_vgg(opt)
-    print('Loading...')
     vgg_model = loadcaffe.load(opt.cnn_proto, opt.cnn_model, opt.back_end)
 
     ---
-    print('Removing the softmax layer')
+    -- print('Removing the softmax layer')
     table.remove(vgg_model['modules'])  -- equivalent to pop
-    table.insert(vgg_model['modules'], nn.LogSoftMax():cuda())
+    
+    -- table.insert(vgg_model['modules'], nn.LogSoftMax():cuda())
     
     -- print(vgg_model['modules'])
     
     -- for k,v in pairs(vgg_model) do print(k,v) end
-    -- following code will change the parameter of the model
     -- print('checking model by sampling temp input...')
     -- print(#vgg_model:cuda():forward(torch.CudaTensor(1, 3, 224, 224)))
 
-    ---
-    print('converting first layer conv filters from BGR to RGB...')
-    local input_layer = vgg_model:get(1)
-    local w = input_layer.weight:clone()
-    -- swap weights to R and B channels
-    input_layer.weight[{ {}, 1, {}, {} }]:copy(w[{ {}, 3, {}, {} }])
-    input_layer.weight[{ {}, 3, {}, {} }]:copy(w[{ {}, 1, {}, {} }])
+    -- no longer need because image is now loaded using opencv, i.e., in BGR format
+    -- print('converting first layer conv filters from BGR to RGB...')
+    -- local input_layer = vgg_model:get(1)
+    -- local w = input_layer.weight:clone()
     
-    criterion = nn.MultilabelNLLCriterion():cuda()
+    -- swap weights to R and B channels
+    -- input_layer.weight[{ {}, 1, {}, {} }]:copy(w[{ {}, 3, {}, {} }])
+    -- input_layer.weight[{ {}, 3, {}, {} }]:copy(w[{ {}, 1, {}, {} }])
+    
+    criterion = nn.MultilabelCrossEntropyCriterion():cuda()
     
     return vgg_model, criterion
 end
@@ -116,8 +117,22 @@ function model_utils.define_vgg(opt)
     model:get(#model).name = 'drop7'
     model:add(nn.Linear(4096, 1000))
     model:get(#model).name = 'fc8'
-    model:add(nn.LogSoftMax())
-    model:get(#model).name = 'logsoftmax'
+    model:add(nn.Sigmoid())
+    model:get(#model).name = 'sigmoid'
+    
+    if opt.phase == 'train' then
+        -- freeze conv1_1,  conv1_2,  conv2_1,  conv2_2
+        local count = 0
+        for i, m in ipairs(model.modules) do
+            if count == 4 then break end
+            if torch.type(m):find('Convolution') then
+                print(i, torch.type(m))
+                m.accGradParameters = function() end
+                m.updateParameters = function() end
+                count = count + 1
+            end
+        end
+    end
     
     cudnn.convert(model, cudnn)
     -- convert data to CudaTensor
@@ -125,31 +140,29 @@ function model_utils.define_vgg(opt)
         m:cuda()
     end
     
-    -- for k,v in pairs(model) do print (k,v) end
-    
-    local model_vgg = model_utils.load_vgg(opt)
     local parameters = model:getParameters() -- all params as one flat variables
-    local parameters_vgg = model_vgg:getParameters() -- all params as one flat variables
     
-    assert(parameters:nElement() == parameters_vgg:nElement())
-    parameters:copy(parameters_vgg)
-    parameters_vgg = nil
-    model_vgg = nil
+    -- for k,v in pairs(model) do print (k,v) end
+    if opt.test_cp ~= '' then
+        print('loading network from a checkpoint ', opt.test_cp)
+        model_cp = torch.load(opt.test_cp)
+        local parameters_cp = model_cp.params
+        assert(parameters:nElement() == parameters_cp:nElement())
+        parameters:copy(parameters_cp)
+        model_cp = nil
+        parameters_cp = nil
+    else
+        print('loading network from a vgg pretrained model')
+        local model_vgg = model_utils.load_vgg(opt)
+        local parameters_vgg = model_vgg:getParameters() -- all params as one flat variables
+        assert(parameters:nElement() == parameters_vgg:nElement())
+        parameters:copy(parameters_vgg)
+        parameters_vgg = nil
+        model_vgg = nil
+    end
     collectgarbage() 
     
-    -- freeze conv1_1,  conv1_2,  conv2_1,  conv2_2
-    local count = 0
-    for i, m in ipairs(model.modules) do
-        if count == 4 then break end
-        if torch.type(m):find('Convolution') then
-            print(i, torch.type(m))
-            m.accGradParameters = function() end
-            m.updateParameters = function() end
-            count = count + 1
-        end
-    end
-    
-    criterion = nn.MultilabelNLLCriterion():cuda()
+    criterion = nn.MultilabelCrossEntropyCriterion():cuda()
     
     return model, criterion
 end
