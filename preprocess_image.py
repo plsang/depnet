@@ -67,19 +67,23 @@ def load_image(params):
         img_id = sorted_imgs[shuffled_i][0]
         img_file = sorted_imgs[shuffled_i][1]
         
-        # note that opencv read image in BGR order
-        im = cv2.imread(os.path.join(params['images_root'], img_file))
-        im = im.astype(np.float32, copy=True)
-        im -= im_mean
         
         try:
-            #I_rsz = imresize(I, (img_size, img_size))
+            # Scipy funciton read image in RGB order
+            # I = imread(os.path.join(params['images_root'], img_file))
+            # I_rsz = imresize(I, (img_size, img_size))
+            
+            # note that opencv read image in BGR order
+            im = cv2.imread(os.path.join(params['images_root'], img_file))
+            im = im.astype(np.float32, copy=True)
+            im -= im_mean
             im_rsz = upsample_image(im, img_size)[0]
             
         except:
             logger.info(' image not readable: %s. Generate random data', img_file)
             # generate random data
             im_rsz = np.random.randint(np.iinfo(np.uint8).max, size=(img_size, img_size, 3))
+            im_rsz -= im_mean
 
         # handle grayscale input images
         if len(im_rsz.shape) == 2:
