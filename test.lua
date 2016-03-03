@@ -24,7 +24,7 @@ cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed ima
 cmd:option('-train_label_file_h5', paths.concat(coco_data_root, 'mscoco2014_train_myconceptsv3.h5'), 'path to the prepressed label data')
 cmd:option('-val_label_file_h5', paths.concat(coco_data_root, 'mscoco2014_val_myconceptsv3.h5'), 'path to the prepressed label data')
 cmd:option('-num_target', 1000, 'Number of target concepts')
-cmd:option('-num_test_image', 1600, 'Number of test image. -1 for all')
+cmd:option('-num_test_image', 40000, 'Number of test image. -1 for all')
 cmd:option('-batch_size', 16, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
@@ -83,15 +83,60 @@ local function average_precision_batch(batch_output, batch_label)
     return batch_ap/batch_size
 end
 
+threshold_values = torch.range(0.1, 0.9, 0.1)
+num_correct = torch.zeros(threshold_values:size(1))
+num_pred = torch.zeros(threshold_values:size(1))
+num_gold = 0
+
+local function precision_recall(batch_output, batch_label)
+    
+    local batch_size = opt.batch_size
+    for i=1, opt.batch_size do
+        local pred = batch_output[i]
+        local gold = batch_label[i]
+        num_gold = num_gold + gold:nonzero():size(1)
+        
+        for j = 1,threshold_values:size(1) do
+            local t = threshold_values[j]
+            -- dbg()
+            pred_t = pred:gt(t):float():nonzero()
+            if pred_t:dim() > 0 then
+                num_pred[j] = num_pred[j] + pred_t:size(1)
+            end
+            
+            correct_t = pred[gold]:gt(t):float():nonzero()
+            if correct_t:dim() > 0 then
+                num_correct[j] = num_correct[j] + correct_t:size(1)
+            end
+            
+        end
+    end   
+end
+    
+local function print_precision_recall()
+    for t=1, threshold_values:size(1) do
+        local precision = num_correct[t] / num_pred[t]
+        local recall = num_correct[t] / num_gold
+        local fscore = 2 * precision * recall / (precision + recall)
+        
+        print(string.format('t=%.6f: precision/recall/f-score %.4f/%.4f/%.4f (%d/%d/%d)', 
+                threshold_values[t], precision, recall, fscore, num_correct[t], num_pred[t], num_gold))
+    end
+end
+
 local map = 0
 for iter=1, num_iters do
     local data = val_loader:getBatch()
     local outputs = vgg_model:forward(data.images:cuda())
+    local iter_loss = criterion:forward(outputs, data.labels:cuda())
     local batch_ap = average_precision_batch(outputs:float(), data.labels)
     map = map + batch_ap
+    -- print(iter_loss, batch_ap)
+    precision_recall(outputs, data.labels)
     
     if iter % 20 == 0 then 
         print(string.format('iter %d: map = %.6f', iter, map/iter))
+        print_precision_recall()
         collectgarbage() 
     end
     

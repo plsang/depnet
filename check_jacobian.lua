@@ -71,8 +71,10 @@ model:add(nn.LogSoftMax())
 -- crit = nn.MultilabelNLLCriterion():cuda()
 crit = nn.MultilabelCrossEntropyCriterion():cuda()
 
-local x = torch.rand(2,10):cuda() -- random input to layer
-local t = torch.rand(2,10):mul(2):floor():cuda()
+-- note: if input is not probabilistic values (0,1), jac check failed
+-- local x = torch.randn(1,10):cuda() -- random input to layer
+local x = torch.rand(1,10):cuda() -- random input to layer
+local t = torch.rand(1,10):mul(2):floor():cuda()
 print(torch.cat(x, t, 1))
 eps=1e-6
 -- print(jacobian_wrt_input(model, x, 1e-7))
