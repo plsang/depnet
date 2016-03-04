@@ -2,8 +2,6 @@ require 'nn'
 require 'cunn' -- otherwise, error: attempt to index field 'THNN' (a nil value)
 require 'cudnn'
 require 'loadcaffe'
-require 'MultilabelNLLCriterion'
-require 'MultilabelCrossEntropyCriterion'
 
 local model_utils = {}
 
@@ -118,10 +116,6 @@ function model_utils.define_vgg(opt)
     end
     
     cudnn.convert(model, cudnn)
-    -- convert data to CudaTensor
-    for i, m in ipairs(model.modules) do
-        m:cuda()
-    end
     
     local parameters = model:getParameters() -- all params as one flat variables
     
@@ -145,9 +139,7 @@ function model_utils.define_vgg(opt)
     end
     collectgarbage() 
     
-    criterion = nn.MultilabelCrossEntropyCriterion():cuda()
-    
-    return model, criterion
+    return model
 end
 
 
@@ -159,10 +151,11 @@ function model_utils.finetune_vgg(opt)
     local model = nn.Sequential()
     
     -- learing rate & weight decay multipliers for this group
-    model.w_lr_mult = 0
-    model.b_lr_mult = 0
-    model.w_wd_mult = 0
-    model.b_wd_mult = 0
+    model.opt = {}
+    model.opt.w_lr_mult = 0
+    model.opt.b_lr_mult = 0
+    model.opt.w_wd_mult = 0
+    model.opt.b_wd_mult = 0
     
     model:add(cudnn.SpatialConvolution(3, 64, 3, 3, 1, 1, 1, 1, 1))
     model:get(#model).name = 'conv1_1'
@@ -191,10 +184,11 @@ function model_utils.finetune_vgg(opt)
     -- group 2: normal weight
     local model = nn.Sequential()
     -- learing rate & weight decay multipliers for this group
-    model.w_lr_mult = 1
-    model.b_lr_mult = 2
-    model.w_wd_mult = 1
-    model.b_wd_mult = 0
+    model.opt = {}
+    model.opt.w_lr_mult = 1
+    model.opt.b_lr_mult = 2
+    model.opt.w_wd_mult = 1
+    model.opt.b_wd_mult = 0
     
     model:add(cudnn.SpatialConvolution(128, 256, 3, 3, 1, 1, 1, 1, 1))
     model:get(#model).name = 'conv3_1'
@@ -259,10 +253,11 @@ function model_utils.finetune_vgg(opt)
     -- group 3: tuning weight
     local model = nn.Sequential()
     -- learing rate & weight decay multipliers for this group
-    model.w_lr_mult = 10
-    model.b_lr_mult = 20
-    model.w_wd_mult = 1
-    model.b_wd_mult = 0
+    model.opt = {}
+    model.opt.w_lr_mult = 10
+    model.opt.b_lr_mult = 20
+    model.opt.w_wd_mult = 1
+    model.opt.b_wd_mult = 0
     
     model:add(cudnn.SpatialConvolution(4096, 1000, 1, 1, 1, 1, 0, 0, 1))
     model:get(#model).name = 'fc8'
@@ -277,7 +272,6 @@ function model_utils.finetune_vgg(opt)
     model = nil
     
     cudnn.convert(main_model, cudnn)
-    main_model:cuda()
     
     local parameters = main_model:getParameters() -- all params as one flat variables
     
@@ -294,8 +288,6 @@ function model_utils.finetune_vgg(opt)
         print('loading network from a vgg pretrained model')
         local model_vgg = model_utils.load_vgg(opt)
         local parameters_vgg = model_vgg:getParameters() -- all params as one flat variables
-        print(parameters:nElement())
-        print(parameters_vgg:nElement())
         assert(parameters:nElement() == parameters_vgg:nElement())
         parameters:copy(parameters_vgg)
         parameters_vgg = nil
@@ -303,10 +295,7 @@ function model_utils.finetune_vgg(opt)
     end
     collectgarbage() 
     
-    
-    criterion = nn.MultilabelCrossEntropyCriterion():cuda()
-    
-    return main_model, criterion
+    return main_model
 end
 
 
