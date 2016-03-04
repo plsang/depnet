@@ -15,3 +15,6 @@ $(DATA_ROOT)/coco_%.h5:
 
 train: 
 	th -i train.lua | tee train.log
+
+test:
+	th -i test.lua -batch_size 1 -test_cp cp/model_iter10000.t7 | tee test10000.log 
