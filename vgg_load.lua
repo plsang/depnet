@@ -39,6 +39,16 @@ layer.weight[{ {}, 3, {}, {} }]:copy(w[{ {}, 1, {}, {} }])
 -- parameters, gradParameters = model:parameters()  -- params at each layer
 parameters, gradParameters = model:getParameters() -- all params as one flat variables
 
+-- print(vgg_model['modules'])
+    
+-- for k,v in pairs(vgg_model) do print(k,v) end
+-- print('checking model by sampling temp input...')
+-- print(#vgg_model:cuda():forward(torch.CudaTensor(1, 3, 224, 224)))
+
+-- no longer need because image is now loaded using opencv, i.e., in BGR format
+-- print('converting first layer conv filters from BGR to RGB...')
+-- local input_layer = vgg_model:get(1)
+-- local w = input_layer.weight:clone()
 
 -- apply a function to each module
 model:apply(function(m) print(torch.type(m)) end)
