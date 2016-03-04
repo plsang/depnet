@@ -38,6 +38,7 @@ end
 function CocoData:getBatch(opt)
     local image_batch = torch.ByteTensor(self.batch_size, self.num_channels, self.image_size, self.image_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
+    local image_ids = torch.LongTensor(self.batch_size)
     local idx = self.iterator
     
     for i=1, self.batch_size do
@@ -47,6 +48,8 @@ function CocoData:getBatch(opt)
         
         local img_id2 = self.label_data:read('/index'):partial({shuffle_idx, shuffle_idx})
         assert(torch.all(torch.eq(img_id1, img_id2)), 'image id not matched!!!')
+        
+        image_ids[i] = img_id1
         
         -- fetch the image from h5
         local img = self.image_data:read('/images'):partial({idx,idx},{1, self.num_channels},
@@ -76,6 +79,7 @@ function CocoData:getBatch(opt)
     local data = {}
     data.images = image_batch
     data.labels = label_batch
+    data.image_ids = image_ids
     return data
 end
 
