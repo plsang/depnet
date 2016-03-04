@@ -41,6 +41,7 @@ cmd:option('-save_cp_interval', 10000, 'to save a check point every interval num
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
+cmd:option('-model_id', '1', 'id of the model. will be put in the check point name')
 cmd:text()
 local opt = cmd:parse(arg)
 
@@ -185,11 +186,11 @@ while true do
     
     -- save checkpoints
     if (iter % opt.save_cp_interval == 0 or iter == opt.max_iters) then
-        local cp_path = path.join(opt.cp_path, 'model_iter' .. iter)
+        local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_iter' .. iter)
         local cp = {}
         cp.opt = opt
         cp.iter = iter
-        cp.loss = loss[1]
+        cp.loss = loss
         cp.params = params
         print('saving checkpoint...')
         torch.save(cp_path .. '.t7', cp)
