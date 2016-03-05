@@ -161,9 +161,9 @@ for _, m in ipairs(finetune_graph.modules) do
             sgd_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
             sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
             
-            if opt.weight_init_std > 0 then
+            if opt.weight_init > 0 then
                 print('Initialize parameter')
-                m:reset(opt.weight_init_std)
+                m:reset(opt.weight_init)
                 m.bias = opt.bias_init
             end
         end
