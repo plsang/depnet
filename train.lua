@@ -8,7 +8,7 @@ require 'CocoData'
 require 'MultilabelCrossEntropyCriterion'
 require 'eval_utils'
 
-dbg = require 'debugger'
+-- dbg = require 'debugger'
 
 local model_utils = require 'model_utils'
 local optim_utils = require 'optim_utils'
@@ -175,7 +175,7 @@ while true do
     -- local _, loss = optim_utils.sgd(feval, params, optim_state)
     
     if iter % opt.print_log_interval == 0 then 
-        print(string.format('iter %d: loss = %.6f (%.3f s)', iter, loss, timer:time().real))
+        print(string.format('%s: iter %d, loss = %.6f (%.3f s/iter)', os.date(), iter, loss, timer:time().real))
         collectgarbage() 
     end
    
