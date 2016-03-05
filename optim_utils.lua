@@ -23,69 +23,68 @@ RETURN:
 (Clement Farabet, 2012)
 ]]
 
-function optim_utils.sgd(opfunc, x, config, state)
-   -- (0) get/update state
-   local config = config or {}
-   local state = state or config
-   local lr = config.learningRate or 1e-3
-   local lrd = config.learningRateDecay or 0
-   local wd = config.weightDecay or 0
-   local mom = config.momentum or 0
-   local damp = config.dampening or mom
-   local nesterov = config.nesterov or false
-   local lrs = config.learningRates
-   local wds = config.weightDecays
-   state.evalCounter = state.evalCounter or 0
-   local nevals = state.evalCounter
-   assert(not nesterov or (mom > 0 and damp == 0), "Nesterov momentum requires a momentum and zero dampening")
+function optim_utils.sgd_finetune(x, dfdx, config, state)
+    -- (0) get/update state
+    local config = config or {}
+    local state = state or config
+    local lr = config.learningRate or 1e-3
+    local lrd = config.learningRateDecay or 0
+    local wd = config.weightDecay or 0
+    local mom = config.momentum or 0
+    local damp = config.dampening or mom
+    local nesterov = config.nesterov or false
+    local lrs = config.learningRates
+    local wds = config.weightDecays
+    state.evalCounter = state.evalCounter or 0
+    local nevals = state.evalCounter
+    assert(not nesterov or (mom > 0 and damp == 0), "Nesterov momentum requires a momentum and zero dampening")
 
-   -- (1) evaluate f(x) and df/dx
-   local fx,dfdx = opfunc(x)
+    -- (2) weight decay with single or individual parameters
+    if wd ~= 0 then
+        -- this will apply weight decay to bias as well, which is wd*b
+        dfdx:add(wd, x)
+        -- minus wd*b
+        for i=1,#config.bias_indices,2 do 
+           dfdx[{{config.bias_indices[i], config.bias_indices[i+1]}}]:add(-wd, x[{{config.bias_indices[i], config.bias_indices[i+1]}}]) 
+        end
+    end
 
-   -- (2) weight decay with single or individual parameters
-   if wd ~= 0 then
-      dfdx:add(wd, x)
-   elseif wds then
-      if not state.decayParameters then
-         state.decayParameters = torch.Tensor():typeAs(x):resizeAs(dfdx)
-      end
-      state.decayParameters:copy(wds):cmul(x)
-      dfdx:add(state.decayParameters)
-   end
+    -- (3) apply momentum
+    if mom ~= 0 then
+        if not state.dfdx then
+            state.dfdx = torch.Tensor():typeAs(dfdx):resizeAs(dfdx):copy(dfdx)
+        else
+            state.dfdx:mul(mom):add(1-damp, dfdx)
+        end
+        if nesterov then
+            dfdx:add(mom, state.dfdx)
+        else
+            dfdx = state.dfdx
+        end
+    end
 
-   -- (3) apply momentum
-   if mom ~= 0 then
-      if not state.dfdx then
-         state.dfdx = torch.Tensor():typeAs(dfdx):resizeAs(dfdx):copy(dfdx)
-      else
-         state.dfdx:mul(mom):add(1-damp, dfdx)
-      end
-      if nesterov then
-         dfdx:add(mom, state.dfdx)
-      else
-         dfdx = state.dfdx
-      end
-   end
+    -- (4) learning rate decay (annealing)
+    local clr = lr / (1 + nevals*lrd)
 
-   -- (4) learning rate decay (annealing)
-   local clr = lr / (1 + nevals*lrd)
-   
-   -- (5) parameter update with single or individual learning rates
-   if lrs then
-      if not state.deltaParameters then
-         state.deltaParameters = torch.Tensor():typeAs(x):resizeAs(dfdx)
-      end
-      state.deltaParameters:copy(lrs):cmul(dfdx)
-      x:add(-clr, state.deltaParameters)
-   else
-      x:add(-clr, dfdx)
-   end
+    -- (5) parameter update, this apply the base learning rate
+    x:add(-clr, dfdx)
+    
+    -- finetuning layer may need more update
+    x[{{config.ft_ind_start, config.ft_ind_end}}]:add(-(config.w_lr_mult-1)*clr, dfdx[{{config.ft_ind_start, config.ft_ind_end}}])
+    
+    -- bias update twice
+    for i=1,#config.bias_indices,2 do 
+        x[{{config.bias_indices[i], config.bias_indices[i+1]}}]:add(-clr, dfdx[{{config.bias_indices[i], config.bias_indices[i+1]}}]) 
+    end
+    -- bias update on fine tuning layer, since it already updated twice, minus 2 to the multiplier
+    x[{{config.ftb_ind_start, config.ftb_ind_end}}]:add(-(config.b_lr_mult-2)*clr, dfdx[{{config.ftb_ind_start, config.ftb_ind_end}}])
+    
+    
+    -- (6) update evaluation counter
+    state.evalCounter = state.evalCounter + 1
 
-   -- (6) update evaluation counter
-   state.evalCounter = state.evalCounter + 1
-
-   -- return x*, f(x) before optimization
-   return x,{fx}
+    -- return x*, f(x) before optimization
+    -- return x, fx
 end
 
 return optim_utils

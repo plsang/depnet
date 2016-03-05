@@ -151,12 +151,7 @@ function model_utils.finetune_vgg(opt)
     local model = nn.Sequential()
     
     -- learing rate & weight decay multipliers for this group
-    model.opt = {}
-    model.opt.w_lr_mult = 0
-    model.opt.b_lr_mult = 0
-    model.opt.w_wd_mult = 0
-    model.opt.b_wd_mult = 0
-    
+    model.frozen = true
     model:add(cudnn.SpatialConvolution(3, 64, 3, 3, 1, 1, 1, 1, 1))
     model:get(#model).name = 'conv1_1'
     model:add(cudnn.ReLU(true))
@@ -184,12 +179,7 @@ function model_utils.finetune_vgg(opt)
     -- group 2: normal weight
     local model = nn.Sequential()
     -- learing rate & weight decay multipliers for this group
-    model.opt = {}
-    model.opt.w_lr_mult = 1
-    model.opt.b_lr_mult = 2
-    model.opt.w_wd_mult = 1
-    model.opt.b_wd_mult = 0
-    
+    model.frozen = false
     model:add(cudnn.SpatialConvolution(128, 256, 3, 3, 1, 1, 1, 1, 1))
     model:get(#model).name = 'conv3_1'
     model:add(cudnn.ReLU(true))
@@ -246,18 +236,6 @@ function model_utils.finetune_vgg(opt)
     model:get(#model).name = 'relu7'
     model:add(nn.Dropout(0.500000))
     model:get(#model).name = 'drop7'
-    
-    main_model:add(model)
-    model = nil
-    
-    -- group 3: tuning weight
-    local model = nn.Sequential()
-    -- learing rate & weight decay multipliers for this group
-    model.opt = {}
-    model.opt.w_lr_mult = 10
-    model.opt.b_lr_mult = 20
-    model.opt.w_wd_mult = 1
-    model.opt.b_wd_mult = 0
     
     model:add(cudnn.SpatialConvolution(4096, 1000, 1, 1, 1, 1, 0, 0, 1))
     model:get(#model).name = 'fc8'

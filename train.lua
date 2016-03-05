@@ -42,6 +42,12 @@ cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
 cmd:option('-model_id', '1', 'id of the model. will be put in the check point name')
+cmd:option('-phase', 'train', 'phase (train/test)')
+cmd:option('-weight_init', 0.001, 'std of gausian to initilize weights & bias')
+cmd:option('-bias_init', -6.58, 'initilize bias to contant')
+cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning layer')
+cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
+
 cmd:text()
 local opt = cmd:parse(arg)
 
@@ -113,46 +119,62 @@ local function feval(x)
     local df_do = criterion:backward(outputs, data.labels:cuda())
     
     model:backward(data.images:cuda(), df_do)
-    return loss, grad_params
+    return loss
 end
 
-local optim_state = {
+--- Setting finetune layer
+
+local sgd_config = {
     learningRate = opt.learning_rate,
     weightDecay = opt.weight_decay,
     momentum = opt.momentum,
     learningRateDecay = opt.learning_rate_decay,
+    w_lr_mult = opt.w_lr_mult,
+    b_lr_mult = opt.b_lr_mult   
 }
 
-local function sgd_layer(layer, opt)
-    local params_, grad_params_ = layer:getParameters()
-    --print(params_:nElement(), grad_params_:nElement(), layer.weight:nElement() + layer.bias:nElement(), 
-    --    layer.gradWeight:nElement() + layer.gradBias:nElement())
-    wlen = layer.weight:nElement()
-    blen = layer.bias:nElement()
+local finetune_graph = model.modules[2]
+assert(finetune_graph.frozen == false)
+local params_finetune, grad_params_finetune = finetune_graph:getParameters()
+assert(params_finetune:nElement(), grad_params_finetune:nElement())
+print('Number of finetune parameters', params_finetune:nElement())
 
-    -- add weight decay to weight
-    grad_params_[{{1,wlen}}]:add(optim_state.weightDecay*opt.w_wd_mult, params_[{{1,wlen}}])
-    if opt.b_wd_mult ~= 0 then
-        grad_params_[{{wlen+1, wlen+blen}}]:add(optim_state.weightDecay*opt.b_wd_mult, params_[{{wlen+1, wlen+blen}}])
-    end
-    
-    params_[{{1,wlen}}]:add(-optim_state.learningRate*opt.w_lr_mult, grad_params_[{{1,wlen}}])
-    params_[{{wlen+1, wlen+blen}}]:add(-optim_state.learningRate*opt.b_lr_mult, grad_params_[{{wlen+1, wlen+blen}}])
-    
-    collectgarbage() 
-end
-
-local function sgd_group(group)
-    if group.opt.w_lr_mult ~= 0 then
-        for _,m in ipairs(group.modules) do
-            if m.weight and m.bias then
-                sgd_layer(m, group.opt)
-            elseif m.weight or m.bias then
-                error('Layer that has weight but no bias or vice versa')
+local bias_indices = {}
+local total_elements = 0
+for _, m in ipairs(finetune_graph.modules) do
+   if m.weight and m.bias then
+        
+        local wlen = m.weight:nElement()
+        local blen = m.bias:nElement()
+        local mlen = wlen + blen
+        table.insert(bias_indices, total_elements + wlen + 1)
+        table.insert(bias_indices, total_elements + mlen)
+        
+        if m.name == 'fc8' then
+            print('Fine tuning layer found!')
+            sgd_config.ft_ind_start = total_elements + 1
+            sgd_config.ft_ind_end = total_elements + mlen
+            sgd_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
+            sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
+            
+            if opt.weight_init_std > 0 then
+                print('Initialize parameter')
+                m:reset(opt.weight_init_std)
+                m.bias = opt.bias_init
             end
-        end    
-    end
+        end
+        
+        total_elements = total_elements + mlen
+   elseif m.weight or m.bias then
+       error('Layer that has either weight or bias')     
+   end
 end
+
+assert(total_elements == params_finetune:nElement(), 'number of params mismatch')
+assert(sgd_config.ft_ind_start, 'Fine tune layer not found')
+
+sgd_config.bias_indices = bias_indices
+print(#bias_indices, bias_indices)
 
 -- TRAINING LOOP --- 
 eval_loss()
@@ -163,19 +185,17 @@ while true do
     
     timer = torch.Timer() 
     
-    -- Call forward/backward
+    -- Call forward/backward with full params input
     local loss = feval(params)
     
     -- Now update params acordingly
-    for group = 1,#model do
-        sgd_group(model.modules[group])
-    end
-    ----
+    optim_utils.sgd_finetune(params_finetune, grad_params_finetune, sgd_config)
     
     -- local _, loss = optim_utils.sgd(feval, params, optim_state)
     
     if iter % opt.print_log_interval == 0 then 
-        print(string.format('%s: iter %d, loss = %.6f (%.3f s/iter)', os.date(), iter, loss, timer:time().real))
+        print(string.format('%s: iter %d, loss = %.6f, lr = %.6f (%.3fs/iter)', 
+                os.date(), iter, loss, sgd_config.learningRate, timer:time().real))
         collectgarbage() 
     end
    
