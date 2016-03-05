@@ -42,18 +42,20 @@ cmd:option('-save_cp_interval', 10000, 'to save a check point every interval num
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
-cmd:option('-model_id', '1', 'id of the model. will be put in the check point name')
+cmd:option('-model_id', '', 'id of the model. will be put in the check point name')
 cmd:option('-phase', 'train', 'phase (train/test)')
 cmd:option('-weight_init', 0.001, 'std of gausian to initilize weights & bias')
 cmd:option('-bias_init', -6.58, 'initilize bias to contant')
 cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning layer')
 cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
+cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value')
 
 cmd:text()
 local opt = cmd:parse(arg)
 
 -- update decaying interval
 opt.learning_rate_decay_interval = opt.learning_rate_decay_interval/opt.batch_size
+if opt.model_id == '' then opt.model_id = opt.batch_size end
 
 print(opt)
 
@@ -82,17 +84,15 @@ assert(params:nElement() == grad_params:nElement())
 
 --
 model:training()
--- model:evaluate()  -- this would change the behavior of modules such as dropout (that have randomized factor)
 
 local function eval_loss()
     model:evaluate()
     val_loader:reset() -- reset interator
     eval:reset()
     
-    print('evaluating...')
-    
     local eval_iters = torch.ceil(opt.num_test_image/opt.batch_size)
     local total_loss = 0
+    local map = 0
     for iter=1, eval_iters do
         local data = val_loader:getBatch()
         local outputs = model:forward(data.images:cuda())
@@ -100,13 +100,16 @@ local function eval_loss()
         total_loss = total_loss + iter_loss 
         
         eval:cal_precision_recall(outputs, data.labels)
+        local batch_map = eval:cal_mean_average_precision(outputs:float(), data.labels)
+        map = map + batch_map
         -- handle the case when the number of test images are not divisible by the batch_size
         if iter == num_iters then
 
         end
     end    
     
-    print ('eval loss = ', total_loss/eval_iters)
+    print (' ==> eval loss = ', opt.loss_weight*total_loss/eval_iters)
+    print (' ==> eval map = ', map/eval_iters)
     eval:print_precision_recall()
     model:training() -- back to the training mode
 end
@@ -162,9 +165,9 @@ for _, m in ipairs(finetune_graph.modules) do
             sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
             
             if opt.weight_init > 0 then
-                print('Initialize parameter')
-                m:reset(opt.weight_init)
-                m.bias = opt.bias_init
+                print('Initialize parameters of the finetuned layer')
+                m.weight:normal(0, opt.weight_init) -- gaussian of zero mean
+                m.bias:fill(opt.bias_init)          -- constant value    
             end
         end
         
@@ -176,9 +179,8 @@ end
 
 assert(total_elements == params_finetune:nElement(), 'number of params mismatch')
 assert(sgd_config.ft_ind_start, 'Fine tune layer not found')
-
+-- assign bias indices to sgd config
 sgd_config.bias_indices = bias_indices
-print(#bias_indices, bias_indices)
 
 -- TRAINING LOOP --- 
 eval_loss()
@@ -198,8 +200,8 @@ while true do
     -- local _, loss = optim_utils.sgd(feval, params, optim_state)
     
     if iter % opt.print_log_interval == 0 then 
-        print(string.format('%s: iter %d, loss = %.7f, lr = %.7f (%.3fs/iter)', 
-                os.date(), iter, loss, sgd_config.learningRate, timer:time().real))
+        print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
+                os.date(), iter, opt.loss_weight*loss, sgd_config.learningRate, timer:time().real))
         collectgarbage() 
     end
    

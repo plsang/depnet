@@ -49,5 +49,35 @@ function eval_utils:print_precision_recall()
     end
 end
 
+-- average precision per image
+function eval_utils:cal_average_precision(pred, gold)
+    sorted_pred, idx = torch.sort(pred) -- sort descending 
+    rank_idx = torch.nonzero(gold):squeeze()
+
+    rank_idx:apply(function(x) local i=idx:eq(x):nonzero()[1][1] return i end)
+    sorted_idx = torch.sort(rank_idx)
+
+    ap = 0
+    for kk=1,sorted_idx:size(1) do
+        ap = ap + kk/sorted_idx[kk]
+    end
+    ap = ap/sorted_idx:size(1)
+    return ap
+end
+    
+function eval_utils:cal_mean_average_precision(batch_output, batch_label)
+    local batch_size = batch_output:size(1)
+    assert(batch_size == batch_label:size(1))
+    local batch_ap = 0
+    for i=1, batch_size do
+        local pred = batch_output[i]
+        local gold = batch_label[i]
+        local ap = self:cal_average_precision(pred, gold)
+        batch_ap = batch_ap + ap
+    end
+    return batch_ap/batch_size
+end
+
+
 return eval_utils
 
