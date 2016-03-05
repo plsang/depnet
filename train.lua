@@ -32,6 +32,7 @@ cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CN
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
 cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
+cmd:option('-learning_rate_decay', 1e-7, 'learning rate for sgd')
 cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate')
 cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
 cmd:option('-momentum', 0.99, 'momentum for sgd')
@@ -194,7 +195,7 @@ while true do
     -- local _, loss = optim_utils.sgd(feval, params, optim_state)
     
     if iter % opt.print_log_interval == 0 then 
-        print(string.format('%s: iter %d, loss = %.6f, lr = %.6f (%.3fs/iter)', 
+        print(string.format('%s: iter %d, loss = %.7f, lr = %.7f (%.3fs/iter)', 
                 os.date(), iter, loss, sgd_config.learningRate, timer:time().real))
         collectgarbage() 
     end
