@@ -43,7 +43,7 @@ function eval_utils:print_precision_recall()
         local recall = self.num_correct[t] / self.num_gold
         local fscore = 2 * precision * recall / (precision + recall)
 
-        print(string.format('t=%.6f: precision/recall/f-score %.4f/%.4f/%.4f (%d/%d/%d)', 
+        print(string.format(' ==> t=%.6f: precision/recall/f-score %.4f/%.4f/%.4f (%d/%d/%d)', 
                 self.threshold_values[t], precision, recall, fscore, 
                 self.num_correct[t], self.num_pred[t], self.num_gold))
     end

@@ -31,7 +31,7 @@ cmd:option('-batch_size', 1, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
-cmd:option('-learning_rate', 0.00001, 'learning rate for sgd')
+cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
 cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
 cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
 cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
@@ -49,7 +49,7 @@ cmd:option('-bias_init', -6.58, 'initilize bias to contant')
 cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning layer')
 cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
 cmd:option('-loss_weight', 1, 'loss multiplier, to display loss as a bigger value')
-
+cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
 cmd:text()
 local opt = cmd:parse(arg)
 
@@ -60,6 +60,9 @@ if opt.save_cp_interval == 0 then opt.save_cp_interval = opt.learning_rate_decay
 
 print(opt)
 
+-- set the manual seed
+torch.manualSeed(opt.seed)
+	
 --- Test loading Coco data
 local train_loader = CocoData{image_file_h5 = opt.train_image_file_h5, 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.train_label_file_h5), 
@@ -79,18 +82,86 @@ local criterion = nn.MultilabelCrossEntropyCriterion():cuda()
 
 print(model.modules)
 
+
+--- Setting finetune layer
+
+local sgd_config = {
+    learningRate = opt.learning_rate,
+    weightDecay = opt.weight_decay,
+    momentum = opt.momentum,
+    learningRateDecay = opt.learning_rate_decay,
+    w_lr_mult = opt.w_lr_mult,
+    b_lr_mult = opt.b_lr_mult   
+}
+
+
+local frozen_graph = model.modules[1]
+assert(frozen_graph.frozen == true)
+
+sgd_config.frozen_start = 1
+
+local total_elements = 0
+for _, m in ipairs(frozen_graph.modules) do
+    if m.weight and m.bias then
+        local wlen = m.weight:nElement()
+        local blen = m.bias:nElement()
+        local mlen = wlen + blen
+	total_elements = total_elements + mlen
+    end
+end
+sgd_config.frozen_end = total_elements
+
+local finetune_graph = model.modules[2]
+assert(finetune_graph.frozen == false)
+
+local bias_indices = {}
+for _, m in ipairs(finetune_graph.modules) do
+   if m.weight and m.bias then
+        
+        local wlen = m.weight:nElement()
+        local blen = m.bias:nElement()
+        local mlen = wlen + blen
+        table.insert(bias_indices, total_elements + wlen + 1)
+        table.insert(bias_indices, total_elements + mlen)
+        
+        if m.name == 'fc8' then
+            print('Fine tuning layer found!')
+            sgd_config.ft_ind_start = total_elements + 1
+            sgd_config.ft_ind_end = total_elements + mlen
+            sgd_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
+            sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
+            
+            if opt.weight_init > 0 then
+                print('Initialize parameters of the finetuned layer')
+                m.weight:zero():normal(0, opt.weight_init) -- gaussian of zero mean
+                m.bias:zero():fill(opt.bias_init)          -- constant value    
+            end
+        end
+        
+        total_elements = total_elements + mlen
+   elseif m.weight or m.bias then
+       error('Layer that has either weight or bias')     
+   end
+end
+
+sgd_config.bias_indices = bias_indices
+
 local params, grad_params = model:getParameters()
 print('total number of parameters: ', params:nElement(), grad_params:nElement())
 assert(params:nElement() == grad_params:nElement())
+assert(total_elements == params:nElement(), 'number of params mismatch')
+assert(sgd_config.ft_ind_start, 'Fine tune layer not found')
 
---
-model:training()
+print('Bias mean (should close to -6.58)', params[{{sgd_config.ftb_ind_start, sgd_config.ftb_ind_end}}]:mean())
+
+print(sgd_config)
 
 local function eval_loss()
     model:evaluate()
     val_loader:reset() -- reset interator
     eval:reset()
     
+    print(' ==> evaluating ...') 
     local eval_iters = torch.ceil(opt.num_test_image/opt.batch_size)
     local total_loss = 0
     local map = 0
@@ -115,7 +186,8 @@ local function eval_loss()
     model:training() -- back to the training mode
 end
 
--- local feval = function(x)
+
+model:training()
 local function feval(x)
     if x ~= params then params:copy(x) end
     grad_params:zero()
@@ -130,61 +202,11 @@ local function feval(x)
     return loss
 end
 
---- Setting finetune layer
+-- first eval
+eval_loss()
 
-local sgd_config = {
-    learningRate = opt.learning_rate,
-    weightDecay = opt.weight_decay,
-    momentum = opt.momentum,
-    learningRateDecay = opt.learning_rate_decay,
-    w_lr_mult = opt.w_lr_mult,
-    b_lr_mult = opt.b_lr_mult   
-}
-
-local finetune_graph = model.modules[2]
-assert(finetune_graph.frozen == false)
-local params_finetune, grad_params_finetune = finetune_graph:getParameters()
-assert(params_finetune:nElement(), grad_params_finetune:nElement())
-print('Number of finetune parameters', params_finetune:nElement())
-
-local bias_indices = {}
-local total_elements = 0
-for _, m in ipairs(finetune_graph.modules) do
-   if m.weight and m.bias then
-        
-        local wlen = m.weight:nElement()
-        local blen = m.bias:nElement()
-        local mlen = wlen + blen
-        table.insert(bias_indices, total_elements + wlen + 1)
-        table.insert(bias_indices, total_elements + mlen)
-        
-        if m.name == 'fc8' then
-            print('Fine tuning layer found!')
-            sgd_config.ft_ind_start = total_elements + 1
-            sgd_config.ft_ind_end = total_elements + mlen
-            sgd_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
-            sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
-            
-            if opt.weight_init > 0 then
-                print('Initialize parameters of the finetuned layer')
-                m.weight:normal(0, opt.weight_init) -- gaussian of zero mean
-                m.bias:fill(opt.bias_init)          -- constant value    
-            end
-        end
-        
-        total_elements = total_elements + mlen
-   elseif m.weight or m.bias then
-       error('Layer that has either weight or bias')     
-   end
-end
-
-assert(total_elements == params_finetune:nElement(), 'number of params mismatch')
-assert(sgd_config.ft_ind_start, 'Fine tune layer not found')
--- assign bias indices to sgd config
-sgd_config.bias_indices = bias_indices
 
 -- TRAINING LOOP --- 
-eval_loss()
 local iter = 0
 while true do 
     
@@ -194,11 +216,10 @@ while true do
     
     -- Call forward/backward with full params input
     local loss = feval(params)
-    
-    -- Now update params acordingly
-    optim_utils.sgd_finetune(params_finetune, grad_params_finetune, sgd_config)
-    
-    -- local _, loss = optim_utils.sgd(feval, params, sgd_conifg)
+   
+     -- Now update params acordingly
+    optim_utils.sgd_finetune(params, grad_params, sgd_config)
+     
     
     if iter % opt.print_log_interval == 0 then 
         print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 

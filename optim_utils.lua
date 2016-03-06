@@ -39,6 +39,9 @@ function optim_utils.sgd_finetune(x, dfdx, config, state)
     local nevals = state.evalCounter
     assert(not nesterov or (mom > 0 and damp == 0), "Nesterov momentum requires a momentum and zero dampening")
 
+    -- (1) copy param of the frozen layers
+    local frozen_x = x[{{config.frozen_start, config.frozen_end}}]:clone()
+   
     -- (2) weight decay with single or individual parameters
     if wd ~= 0 then
         -- this will apply weight decay to bias as well, which is wd*b
@@ -83,6 +86,9 @@ function optim_utils.sgd_finetune(x, dfdx, config, state)
     -- (6) update evaluation counter
     state.evalCounter = state.evalCounter + 1
 
+    -- (7) restore frozen_x
+    x[{{config.frozen_start, config.frozen_end}}]:copy(frozen_x)
+    frozen_x = nil
     -- return x*, f(x) before optimization
     -- return x, fx
 end
