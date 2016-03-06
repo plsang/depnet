@@ -31,14 +31,14 @@ cmd:option('-batch_size', 1, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
-cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
+cmd:option('-learning_rate', 0.00001, 'learning rate for sgd')
 cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
-cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate')
+cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
 cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
 cmd:option('-momentum', 0.99, 'momentum for sgd')
 cmd:option('-weight_decay', 0.0005, 'momentum for sgd')
 cmd:option('-max_iters', 1000000)
-cmd:option('-save_cp_interval', 10000, 'to save a check point every interval number of iterations')
+cmd:option('-save_cp_interval', 0, 'to save a check point every interval number of iterations')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
@@ -48,7 +48,7 @@ cmd:option('-weight_init', 0.001, 'std of gausian to initilize weights & bias')
 cmd:option('-bias_init', -6.58, 'initilize bias to contant')
 cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning layer')
 cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
-cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value')
+cmd:option('-loss_weight', 1, 'loss multiplier, to display loss as a bigger value')
 
 cmd:text()
 local opt = cmd:parse(arg)
@@ -56,6 +56,7 @@ local opt = cmd:parse(arg)
 -- update decaying interval
 opt.learning_rate_decay_interval = opt.learning_rate_decay_interval/opt.batch_size
 if opt.model_id == '' then opt.model_id = opt.batch_size end
+if opt.save_cp_interval == 0 then opt.save_cp_interval = opt.learning_rate_decay_interval end
 
 print(opt)
 
@@ -197,7 +198,7 @@ while true do
     -- Now update params acordingly
     optim_utils.sgd_finetune(params_finetune, grad_params_finetune, sgd_config)
     
-    -- local _, loss = optim_utils.sgd(feval, params, optim_state)
+    -- local _, loss = optim_utils.sgd(feval, params, sgd_conifg)
     
     if iter % opt.print_log_interval == 0 then 
         print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
@@ -223,8 +224,8 @@ while true do
     end
 
     if iter % opt.learning_rate_decay_interval == 0 then
-        optim_state.learningRate = optim_state.learningRate/opt.gamma_factor
-        print('new learning rate', optim_state.learningRate)
+        sgd_config.learningRate = sgd_config.learningRate * opt.gamma_factor
+        print('new learning rate', sgd_config.learningRate)
     end
     
     if iter >= opt.max_iters then 
