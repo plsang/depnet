@@ -107,7 +107,7 @@ if __name__ == "__main__":
     parser.add_argument('--input_json', required=True, help='COCO json file e.g., captions_val2014.json ')
     parser.add_argument('--output_h5', required=True, help='Output h5 file')
     parser.add_argument('--images_root', default='', help='Location of COCO image directory')
-    parser.add_argument('--images_size', default=227, type=int, help='Location of COCO image directory')
+    parser.add_argument('--images_size', default=224, type=int, help='Location of COCO image directory')
     parser.add_argument('--seed', default=123, type=int, help='Random seed')
     
     args = parser.parse_args()
