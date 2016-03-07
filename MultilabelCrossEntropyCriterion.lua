@@ -18,7 +18,11 @@ function MultilabelCrossEntropyCriterion:__init(loss_weight, weights, sizeAverag
     self.target = torch.zeros(1):long()
     
     -- support caffe loss weight
-    self.loss_weight = loss_weight
+    if loss_weight then
+        self.loss_weight = loss_weight
+    else
+        self.loss_weight = 1
+    end
     assert(self.loss_weight > 0)
 end
 
