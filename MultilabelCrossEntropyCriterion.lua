@@ -1,7 +1,7 @@
 local THNN = require 'nn.THNN'
 local MultilabelCrossEntropyCriterion, parent = torch.class('nn.MultilabelCrossEntropyCriterion', 'nn.Criterion')
 
-function MultilabelCrossEntropyCriterion:__init(weights, sizeAverage)
+function MultilabelCrossEntropyCriterion:__init(loss_weight, weights, sizeAverage)
     parent.__init(self)
     if sizeAverage ~= nil then
        self.sizeAverage = sizeAverage
@@ -16,6 +16,10 @@ function MultilabelCrossEntropyCriterion:__init(weights, sizeAverage)
     self.output_tensor = torch.zeros(1)
     self.total_weight_tensor = torch.ones(1)
     self.target = torch.zeros(1):long()
+    
+    -- support caffe loss weight
+    self.loss_weight = loss_weight
+    assert(self.loss_weight > 0)
 end
 
 function MultilabelCrossEntropyCriterion:__len()
@@ -59,7 +63,7 @@ function MultilabelCrossEntropyCriterion:updateOutput(input, target)
     return self.output, self.total_weight_tensor[1]
 end
 
-
+-- Note that loss_weight is multipiled at element-wise
 function MultilabelCrossEntropyCriterion:updateGradInput(input, target)
     if target:type() == 'torch.CudaTensor' then
         
@@ -73,9 +77,9 @@ function MultilabelCrossEntropyCriterion:updateGradInput(input, target)
         for i=1,input:size(1) do
             for j=1,input:size(2) do
                 if target[i][j] == 1 then
-                    val = -1/math.max(input[i][j], eps)/input:nElement()
+                    val = -self.loss_weight/(math.max(input[i][j], eps) * input:nElement())
                 else
-                    val = 1/math.max(1-input[i][j], eps)/input:nElement()
+                    val = self.loss_weight/(math.max(1-input[i][j], eps) * input:nElement())
                 end
                 self.gradInput[i][j] = val
             end

@@ -48,7 +48,7 @@ cmd:option('-weight_init', 0.001, 'std of gausian to initilize weights & bias')
 cmd:option('-bias_init', -6.58, 'initilize bias to contant')
 cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning layer')
 cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
-cmd:option('-loss_weight', 1, 'loss multiplier, to display loss as a bigger value')
+cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
 cmd:text()
 local opt = cmd:parse(arg)
@@ -77,8 +77,8 @@ local val_loader = CocoData{image_file_h5 = opt.val_image_file_h5,
 local eval = eval_utils()
 
 ---
-local model = model_utils.finetune_vgg(opt):cuda() -- model must be global, otherwise, C++ exception!!!
-local criterion = nn.MultilabelCrossEntropyCriterion():cuda()
+local model = model_utils.finetune_vgg(opt):cuda() 
+local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
 
 print(model.modules)
 
@@ -106,7 +106,7 @@ for _, m in ipairs(frozen_graph.modules) do
         local wlen = m.weight:nElement()
         local blen = m.bias:nElement()
         local mlen = wlen + blen
-	total_elements = total_elements + mlen
+    total_elements = total_elements + mlen
     end
 end
 sgd_config.frozen_end = total_elements
