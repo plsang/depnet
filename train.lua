@@ -10,7 +10,7 @@ require 'CocoData'
 require 'MultilabelCrossEntropyCriterion'
 require 'eval_utils'
 
--- dbg = require 'debugger'
+dbg = require 'debugger'
 
 local model_utils = require 'model_utils'
 local optim_utils = require 'optim_utils'
@@ -49,6 +49,7 @@ cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger val
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
 cmd:option('-optim', 'sgd', 'optimization method: sgd, adam')
 cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
+cmd:option('-batch_norm', 0, 'batch normalization')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
 -- these options are for SGD
 cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
@@ -89,7 +90,13 @@ local val_loader = CocoData{image_file_h5 = opt.val_image_file_h5,
 local eval = eval_utils()
 
 ---
-local model = model_utils.finetune_vgg(opt):cuda() 
+local model = nil
+if opt.batch_norm == 0 then
+    model = model_utils.finetune_vgg(opt):cuda() 
+else
+    model = model_utils.finetune_vgg_bn(opt):cuda() 
+end
+
 local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
 print(model.modules)
 
