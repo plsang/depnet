@@ -1,29 +1,66 @@
 local optim_utils = {}
 
---[[ A plain implementation of SGD
-ARGS:
-- `opfunc` : a function that takes a single input (X), the point
-             of a evaluation, and returns f(X) and df/dX
-- `x`      : the initial point
-- `config` : a table with configuration parameters for the optimizer
-- `config.learningRate`      : learning rate
-- `config.learningRateDecay` : learning rate decay
-- `config.weightDecay`       : weight decay
-- `config.weightDecays`      : vector of individual weight decays
-- `config.momentum`          : momentum
-- `config.dampening`         : dampening for momentum
-- `config.nesterov`          : enables Nesterov momentum
-- `config.learningRates`     : vector of individual learning rates
-- `state`  : a table describing the state of the optimizer; after each
-             call the state is modified
-- `state.evalCounter`        : evaluation counter (optional: 0, by default)
-RETURN:
-- `x`     : the new x vector
-- `f(x)`  : the function, evaluated before the update
-(Clement Farabet, 2012)
-]]
+function optim_utils.sgd_config(model, opt)
+    local sgd_config = {
+        learningRate = opt.learning_rate,
+        weightDecay = opt.weight_decay,
+        momentum = opt.momentum,
+        learningRateDecay = opt.learning_rate_decay,
+        w_lr_mult = opt.w_lr_mult,
+        b_lr_mult = opt.b_lr_mult   
+    }
 
-function optim_utils.sgd_finetune(x, dfdx, config, state)
+    local frozen_graph = model.modules[1]
+    assert(frozen_graph.frozen == true)
+
+    sgd_config.frozen_start = 1
+
+    local total_elements = 0
+    for _, m in ipairs(frozen_graph.modules) do
+        if m.weight and m.bias then
+            local wlen = m.weight:nElement()
+            local blen = m.bias:nElement()
+            local mlen = wlen + blen
+            total_elements = total_elements + mlen
+        end
+    end
+    
+    sgd_config.frozen_end = total_elements
+
+    local finetune_graph = model.modules[2]
+    assert(finetune_graph.frozen == false)
+
+    local bias_indices = {}
+    for _, m in ipairs(finetune_graph.modules) do
+       if m.weight and m.bias then
+
+            local wlen = m.weight:nElement()
+            local blen = m.bias:nElement()
+            local mlen = wlen + blen
+            table.insert(bias_indices, total_elements + wlen + 1)
+            table.insert(bias_indices, total_elements + mlen)
+
+            if m.name == opt.finetune_layer_name then
+                print('Fine tuning layer found!')
+                sgd_config.ft_ind_start = total_elements + 1
+                sgd_config.ft_ind_end = total_elements + mlen
+                sgd_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
+                sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
+            end
+
+            total_elements = total_elements + mlen
+       elseif m.weight or m.bias then
+           error('Layer that has either weight or bias')     
+       end
+    end
+
+    sgd_config.bias_indices = bias_indices
+    assert(sgd_config.ft_ind_start, 'Fine tuning layer not found')
+    
+    return sgd_config
+end
+
+function optim_utils.sgd(x, dfdx, config, state)
     -- (0) get/update state
     local config = config or {}
     local state = state or config
@@ -42,7 +79,7 @@ function optim_utils.sgd_finetune(x, dfdx, config, state)
     -- (1) copy param of the frozen layers
     local frozen_x = x[{{config.frozen_start, config.frozen_end}}]:clone()
    
-    -- (2) weight decay with single or individual parameters
+    -- (2) weight decay with single
     if wd ~= 0 then
         -- this will apply weight decay to bias as well, which is wd*b
         dfdx:add(wd, x)
@@ -92,5 +129,36 @@ function optim_utils.sgd_finetune(x, dfdx, config, state)
     -- return x*, f(x) before optimization
     -- return x, fx
 end
+
+function optim_utils.adam(x, dfdx, config, state)
+    local beta1 = config.adam_beta1 or 0.9
+    local beta2 = config.adam_beta2 or 0.999
+    local epsilon = config.adam_epsilon or 1e-8
+    local state = state or config
+    local lr = config.learningRate or 1e-3
+    
+    if not state.m then
+        --initialization
+        state.t = 0
+        -- momentum1 m = beta1*m + (1-beta1)*dx
+        state.m = x.new(#dfdx):zero()
+        -- mementum2 v = beta2*v + (1-beta2)*(dx**2)
+        state.v = x.new(#dfdx):zero()
+        -- tmp tensor to hold the sqrt(v) + epsilon
+        state.tmp = x.new(#dfdx):zero()
+    end
+    
+    state.m:mul(beta1):add(1-beta1, dfdx)
+    state.v:mul(beta2):addcmul(1-beta2, dfdx, dfdx)
+    state.tmp:copy(state.v):sqrt():add(epsilon)
+    
+    state.t = state.t + 1
+    local biasCorrection1 = 1 - beta1^state.t
+    local biasCorrection2 = 1 - beta2^state.t
+    local stepSize = lr * math.sqrt(biasCorrection2)/biasCorrection1
+    
+    x:addcdiv(-stepSize, state.m, state.tmp)
+end
+
 
 return optim_utils

@@ -4,6 +4,8 @@ Class to train
 
 require 'nn'
 require 'cudnn'
+local cjson = require 'cjson'
+
 require 'CocoData'
 require 'MultilabelCrossEntropyCriterion'
 require 'eval_utils'
@@ -23,6 +25,7 @@ cmd:option('-train_image_file_h5', 'data/coco_train.h5', 'path to the prepressed
 cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed image data')
 cmd:option('-train_label_file_h5', 'mscoco2014_train_myconceptsv3.h5', 'file name of the prepressed train label data')
 cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
+cmd:option('-vocab_file', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
 cmd:option('-num_target', 1000, 'Number of target concepts')
 cmd:option('-num_test_image', 1600, 'Number of test image.')
 cmd:option('-test_interval', 1000, 'Number of test image.')
@@ -31,12 +34,6 @@ cmd:option('-batch_size', 1, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
-cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
-cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
-cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
-cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
-cmd:option('-momentum', 0.99, 'momentum for sgd')
-cmd:option('-weight_decay', 0.0005, 'momentum for sgd')
 cmd:option('-max_iters', 1000000)
 cmd:option('-save_cp_interval', 0, 'to save a check point every interval number of iterations')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
@@ -50,19 +47,34 @@ cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning la
 cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
+cmd:option('-optim', 'sgd', 'optimization method: sgd, adam')
+cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
+cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
+-- these options are for SGD
+cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
+cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
+cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
+cmd:option('-momentum', 0.99, 'momentum for sgd')
+cmd:option('-weight_decay', 0.0005, 'momentum for sgd')
+-- these options are for Adam
+cmd:option('-adam_beta1', 0.9, 'momentum for adam')
+cmd:option('-adam_beta2', 0.999, 'momentum for adam')
+cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
+--
+
 cmd:text()
 local opt = cmd:parse(arg)
 
 -- update decaying interval
 opt.learning_rate_decay_interval = opt.learning_rate_decay_interval/opt.batch_size
-if opt.model_id == '' then opt.model_id = opt.batch_size end
+if opt.model_id == '' then opt.model_id = opt.optim .. opt.batch_size end
 if opt.save_cp_interval == 0 then opt.save_cp_interval = opt.learning_rate_decay_interval end
 
 print(opt)
 
 -- set the manual seed
 torch.manualSeed(opt.seed)
-	
+
 --- Test loading Coco data
 local train_loader = CocoData{image_file_h5 = opt.train_image_file_h5, 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.train_label_file_h5), 
@@ -79,82 +91,31 @@ local eval = eval_utils()
 ---
 local model = model_utils.finetune_vgg(opt):cuda() 
 local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
-
 print(model.modules)
 
-
---- Setting finetune layer
-
-local sgd_config = {
-    learningRate = opt.learning_rate,
-    weightDecay = opt.weight_decay,
-    momentum = opt.momentum,
-    learningRateDecay = opt.learning_rate_decay,
-    w_lr_mult = opt.w_lr_mult,
-    b_lr_mult = opt.b_lr_mult   
-}
-
-
-local frozen_graph = model.modules[1]
-assert(frozen_graph.frozen == true)
-
-sgd_config.frozen_start = 1
-
-local total_elements = 0
-for _, m in ipairs(frozen_graph.modules) do
-    if m.weight and m.bias then
-        local wlen = m.weight:nElement()
-        local blen = m.bias:nElement()
-        local mlen = wlen + blen
-    total_elements = total_elements + mlen
-    end
-end
-sgd_config.frozen_end = total_elements
-
-local finetune_graph = model.modules[2]
-assert(finetune_graph.frozen == false)
-
-local bias_indices = {}
-for _, m in ipairs(finetune_graph.modules) do
-   if m.weight and m.bias then
-        
-        local wlen = m.weight:nElement()
-        local blen = m.bias:nElement()
-        local mlen = wlen + blen
-        table.insert(bias_indices, total_elements + wlen + 1)
-        table.insert(bias_indices, total_elements + mlen)
-        
-        if m.name == 'fc8' then
-            print('Fine tuning layer found!')
-            sgd_config.ft_ind_start = total_elements + 1
-            sgd_config.ft_ind_end = total_elements + mlen
-            sgd_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
-            sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
-            
-            if opt.weight_init > 0 then
-                print('Initialize parameters of the finetuned layer')
-                m.weight:zero():normal(0, opt.weight_init) -- gaussian of zero mean
-                m.bias:zero():fill(opt.bias_init)          -- constant value    
-            end
-        end
-        
-        total_elements = total_elements + mlen
-   elseif m.weight or m.bias then
-       error('Layer that has either weight or bias')     
-   end
-end
-
-sgd_config.bias_indices = bias_indices
+-- Initialization
+model_utils.init_finetuning_params(model, opt)
 
 local params, grad_params = model:getParameters()
 print('total number of parameters: ', params:nElement(), grad_params:nElement())
-assert(params:nElement() == grad_params:nElement())
-assert(total_elements == params:nElement(), 'number of params mismatch')
-assert(sgd_config.ft_ind_start, 'Fine tune layer not found')
 
-print('Bias mean (should close to -6.58)', params[{{sgd_config.ftb_ind_start, sgd_config.ftb_ind_end}}]:mean())
+-- note: don't use 'config' as a variable name
+local optim_config = {}
 
-print(sgd_config)
+if opt.optim == 'sgd' then
+    optim_config = optim_utils.sgd_config(model, opt)
+elseif opt.optim == 'adam' then
+    optim_config = {
+        learningRate = opt.learning_rate,
+        adam_beta1 = opt.adam_beta1,
+        adam_beta2 = opt.adam_beta2,
+        adam_epsilon = opt.adam_epsilon
+    }
+else
+    error('Unknow optimization method', opt.optim)
+end
+
+print('Optimization configurations', optim_config) 
 
 local function eval_loss()
     model:evaluate()
@@ -180,14 +141,15 @@ local function eval_loss()
         end
     end    
     
-    print (' ==> eval loss = ', opt.loss_weight*total_loss/eval_iters)
+    local loss = opt.loss_weight*total_loss/eval_iters
+    print (' ==> eval loss = ', loss)
     print (' ==> eval map = ', map/eval_iters)
+    
     eval:print_precision_recall()
     model:training() -- back to the training mode
+    return loss
 end
 
-
-model:training()
 local function feval(x)
     if x ~= params then params:copy(x) end
     grad_params:zero()
@@ -202,55 +164,84 @@ local function feval(x)
     return loss
 end
 
--- first eval
-eval_loss()
-
-
--- TRAINING LOOP --- 
+-- MAIN LOOP --- 
 local iter = 0
+local loss_history = {}
+local val_loss_history = {}
+
+-- Save model
+local function save_model()
+    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_iter' .. iter)
+    local cp = {}
+    cp.opt = opt
+    cp.iter = iter
+    cp.loss_history = loss_history
+    cp.val_loss_history = val_loss_history
+    cp.params = params
+    -- saving vocabulary
+    if paths.filep(opt.vocab_file) then
+        local fh = io.open(path, 'r')
+        local json_text = fh:read()
+        fh:close()
+        local vocab = cjson.decode(json_text)
+        cp.vocab = vocab
+    else
+        print('*** Warning ***: Vocab file not found! ', opt.vocab_file)
+    end
+
+    print('Saving checkpoint to', cp_path)
+    torch.save(cp_path .. '.t7', cp)
+end
+
+-- First evaluation
+-- eval_loss()
+
+model:training()
+
+-- Training
 while true do 
-    
+
     iter = iter + 1
-    
-    timer = torch.Timer() 
+    local timer = torch.Timer() 
     
     -- Call forward/backward with full params input
     local loss = feval(params)
    
      -- Now update params acordingly
-    optim_utils.sgd_finetune(params, grad_params, sgd_config)
-     
+    if opt.optim == 'sgd' then
+        optim_utils.sgd(params, grad_params, optim_config)
+    elseif opt.optim == 'adam' then
+        optim_utils.adam(params, grad_params, optim_config)   
+    else
+        error('Unknow optimization method', opt.optim)
+    end
     
     if iter % opt.print_log_interval == 0 then 
+        loss_history[iter] = loss
         print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
-                os.date(), iter, opt.loss_weight*loss, sgd_config.learningRate, timer:time().real))
+                os.date(), iter, opt.loss_weight*loss, optim_config.learningRate, timer:time().real))
         collectgarbage() 
     end
    
     -- test loss
     if (iter % opt.test_interval == 0) then
-        eval_loss()
+        local val_loss = eval_loss()
+        val_loss_history[iter] = val_loss
     end
     
     -- save checkpoints
     if (iter % opt.save_cp_interval == 0 or iter == opt.max_iters) then
-        local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_iter' .. iter)
-        local cp = {}
-        cp.opt = opt
-        cp.iter = iter
-        cp.loss = loss
-        cp.params = params
-        print('saving checkpoint...')
-        torch.save(cp_path .. '.t7', cp)
+        save_model()
     end
 
-    if iter % opt.learning_rate_decay_interval == 0 then
-        sgd_config.learningRate = sgd_config.learningRate * opt.gamma_factor
-        print('new learning rate', sgd_config.learningRate)
+    -- Learning rate decay for SGD
+    if opt.optim == 'sgd' and iter % opt.learning_rate_decay_interval == 0 then
+        config.learningRate = config.learningRate * opt.gamma_factor
+        print('new learning rate', config.learningRate)
     end
     
+    -- Break condition
     if iter >= opt.max_iters then 
-        eval_loss()
         break 
     end
 end    

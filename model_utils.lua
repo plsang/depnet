@@ -17,6 +17,23 @@ function model_utils.load_vgg(opt)
     return vgg_model, criterion
 end
 
+function model_utils.init_finetuning_params(model, opt)
+    for _, m in ipairs(model:listModules()) do
+        if m.weight and m.bias then
+            if m.name == opt.finetune_layer_name then
+                if opt.weight_init > 0 then
+                    print('Initializing parameters of the finetuned layer')
+                    m.weight:zero():normal(0, opt.weight_init) -- gaussian of zero mean
+                    m.bias:zero():fill(opt.bias_init)          -- constant value    
+                end
+            end
+        elseif m.weight or m.bias then
+            error('Layer that has either weight or bias')     
+        end
+    end
+
+end
+
 -- Define the model, then copy parameters
 function model_utils.define_vgg(opt)
     local model = nn.Sequential()
