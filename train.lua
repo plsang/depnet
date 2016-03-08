@@ -10,7 +10,7 @@ require 'CocoData'
 require 'MultilabelCrossEntropyCriterion'
 require 'eval_utils'
 
-dbg = require 'debugger'
+-- dbg = require 'debugger'
 
 local model_utils = require 'model_utils'
 local optim_utils = require 'optim_utils'
@@ -28,26 +28,26 @@ cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of
 cmd:option('-vocab_file', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
 cmd:option('-num_target', 1000, 'Number of target concepts')
 cmd:option('-num_test_image', 1600, 'Number of test image.')
-cmd:option('-test_interval', 1000, 'Number of test image.')
+cmd:option('-test_interval', 10000, 'Number of test image.')
 cmd:option('-print_log_interval', 20, 'Number of test image.')
 cmd:option('-batch_size', 1, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
 cmd:option('-max_iters', 1000000)
-cmd:option('-save_cp_interval', 0, 'to save a check point every interval number of iterations')
+cmd:option('-save_cp_interval', 80000, 'to save a check point every interval number of iterations')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
 cmd:option('-model_id', '', 'id of the model. will be put in the check point name')
 cmd:option('-phase', 'train', 'phase (train/test)')
 cmd:option('-weight_init', 0.001, 'std of gausian to initilize weights & bias')
-cmd:option('-bias_init', -6.58, 'initilize bias to contant')
+cmd:option('-bias_init', 0, 'initilize bias to contant')
 cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning layer')
 cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
-cmd:option('-optim', 'sgd', 'optimization method: sgd, adam')
+cmd:option('-optim', 'adam', 'optimization method: sgd, adam')
 cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
 cmd:option('-batch_norm', 0, 'batch normalization')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
@@ -186,14 +186,15 @@ local function save_model()
     cp.val_loss_history = val_loss_history
     cp.params = params
     -- saving vocabulary
-    if paths.filep(opt.vocab_file) then
-        local fh = io.open(path, 'r')
+    local vocab_path = paths.concat(opt.coco_data_root, opt.vocab_file)
+    if paths.filep(vocab_path) then
+        local fh = io.open(vocab_path, 'r')
         local json_text = fh:read()
         fh:close()
         local vocab = cjson.decode(json_text)
         cp.vocab = vocab
     else
-        print('*** Warning ***: Vocab file not found! ', opt.vocab_file)
+        print('*** Warning ***: Vocab file not found! ', opt.vocab_path)
     end
 
     print('Saving checkpoint to', cp_path)
