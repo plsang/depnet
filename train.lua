@@ -35,7 +35,7 @@ cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CN
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
 cmd:option('-max_iters', 1000000)
-cmd:option('-save_cp_interval', 80000, 'to save a check point every interval number of iterations')
+cmd:option('-save_cp_interval', 0, 'to save a check point every interval number of iterations')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
@@ -67,19 +67,14 @@ cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
 cmd:text()
 local opt = cmd:parse(arg)
 
--- update decaying interval
-opt.learning_rate_decay_interval = opt.learning_rate_decay_interval/opt.batch_size
 if opt.model_id == '' then 
     opt.model_id = ('%s_b%d_lr%f').format(opt.optim, opt.batch_size, opt.learning_rate)
 end
-if opt.save_cp_interval == 0 then opt.save_cp_interval = opt.learning_rate_decay_interval end
-
-print(opt)
 
 -- set the manual seed
 torch.manualSeed(opt.seed)
 
---- Test loading Coco data
+--- loading Coco data
 local train_loader = CocoData{image_file_h5 = opt.train_image_file_h5, 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.train_label_file_h5), 
     num_target = opt.num_target, 
@@ -90,9 +85,16 @@ local val_loader = CocoData{image_file_h5 = opt.val_image_file_h5,
     num_target = opt.num_target, 
     batch_size = opt.batch_size}
 
+if opt.save_cp_interval == 0 then 
+    opt.save_cp_interval = math.ceil(train_loader:getNumImages(), opt.batch_size)
+end
+
+-- 
+print(opt)
+
 local eval = eval_utils()
 
----
+--
 local model = nil
 if opt.batch_norm == 0 then
     model = model_utils.finetune_vgg(opt):cuda() 
