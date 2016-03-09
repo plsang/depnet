@@ -1,65 +1,5 @@
 local optim_utils = {}
 
-function optim_utils.sgd_config(model, opt)
-    local sgd_config = {
-        learningRate = opt.learning_rate,
-        weightDecay = opt.weight_decay,
-        momentum = opt.momentum,
-        learningRateDecay = opt.learning_rate_decay,
-        w_lr_mult = opt.w_lr_mult,
-        b_lr_mult = opt.b_lr_mult   
-    }
-
-    local frozen_graph = model.modules[1]
-    assert(frozen_graph.frozen == true)
-
-    sgd_config.frozen_start = 1
-
-    local total_elements = 0
-    for _, m in ipairs(frozen_graph.modules) do
-        if m.weight and m.bias then
-            local wlen = m.weight:nElement()
-            local blen = m.bias:nElement()
-            local mlen = wlen + blen
-            total_elements = total_elements + mlen
-        end
-    end
-    
-    sgd_config.frozen_end = total_elements
-
-    local finetune_graph = model.modules[2]
-    assert(finetune_graph.frozen == false)
-
-    local bias_indices = {}
-    for _, m in ipairs(finetune_graph.modules) do
-       if m.weight and m.bias then
-
-            local wlen = m.weight:nElement()
-            local blen = m.bias:nElement()
-            local mlen = wlen + blen
-            table.insert(bias_indices, total_elements + wlen + 1)
-            table.insert(bias_indices, total_elements + mlen)
-
-            if m.name == opt.finetune_layer_name then
-                print('Fine tuning layer found!')
-                sgd_config.ft_ind_start = total_elements + 1
-                sgd_config.ft_ind_end = total_elements + mlen
-                sgd_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
-                sgd_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
-            end
-
-            total_elements = total_elements + mlen
-       elseif m.weight or m.bias then
-           error('Layer that has either weight or bias')     
-       end
-    end
-
-    sgd_config.bias_indices = bias_indices
-    assert(sgd_config.ft_ind_start, 'Fine tuning layer not found')
-    
-    return sgd_config
-end
-
 function optim_utils.sgd(x, dfdx, config, state)
     -- (0) get/update state
     local config = config or {}
@@ -155,9 +95,18 @@ function optim_utils.adam(x, dfdx, config, state)
     state.t = state.t + 1
     local biasCorrection1 = 1 - beta1^state.t
     local biasCorrection2 = 1 - beta2^state.t
-    local stepSize = lr * math.sqrt(biasCorrection2)/biasCorrection1
+    local clr = lr * math.sqrt(biasCorrection2)/biasCorrection1
     
-    x:addcdiv(-stepSize, state.m, state.tmp)
+    x:addcdiv(-clr, state.m, state.tmp)
+    
+    -- finetuning layer needs more update
+    if config.ft_lr_mult > 1 then
+        x[{{config.ft_ind_start, config.ft_ind_end}}]:addcdiv(
+            -(config.ft_lr_mult-1)*clr, 
+            state.m[{{config.ft_ind_start, config.ft_ind_end}}], 
+            state.tmp[{{config.ft_ind_start, config.ft_ind_end}}])
+    end
+    
 end
 
 

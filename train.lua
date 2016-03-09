@@ -45,6 +45,7 @@ cmd:option('-weight_init', 0.001, 'std of gausian to initilize weights & bias')
 cmd:option('-bias_init', 0, 'initilize bias to contant')
 cmd:option('-w_lr_mult', 10, 'learning multipier for weight on the finetuning layer')
 cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning layer')
+cmd:option('-ft_lr_mult', 1, 'learning multipier for the finetuning layer, same for weight and bias')
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
 cmd:option('-optim', 'adam', 'optimization method: sgd, adam')
@@ -68,7 +69,9 @@ local opt = cmd:parse(arg)
 
 -- update decaying interval
 opt.learning_rate_decay_interval = opt.learning_rate_decay_interval/opt.batch_size
-if opt.model_id == '' then opt.model_id = opt.optim .. opt.batch_size end
+if opt.model_id == '' then 
+    opt.model_id = ('%s_b%d_lr%f').format(opt.optim, opt.batch_size, opt.learning_rate)
+end
 if opt.save_cp_interval == 0 then opt.save_cp_interval = opt.learning_rate_decay_interval end
 
 print(opt)
@@ -107,20 +110,27 @@ local params, grad_params = model:getParameters()
 print('total number of parameters: ', params:nElement(), grad_params:nElement())
 
 -- note: don't use 'config' as a variable name
-local optim_config = {}
+local optim_config = {
+    learningRate = opt.learning_rate,
+    w_lr_mult = opt.w_lr_mult,
+    b_lr_mult = opt.b_lr_mult,
+    ft_lr_mult = opt.ft_lr_mult  -- if w and b have the same learning rate
+}
 
 if opt.optim == 'sgd' then
-    optim_config = optim_utils.sgd_config(model, opt)
+    optim_config.weightDecay = opt.weight_decay
+    optim_config.momentum = opt.momentum
+    optim_config.learningRateDecay = opt.learning_rate_decay
 elseif opt.optim == 'adam' then
-    optim_config = {
-        learningRate = opt.learning_rate,
-        adam_beta1 = opt.adam_beta1,
-        adam_beta2 = opt.adam_beta2,
-        adam_epsilon = opt.adam_epsilon
-    }
+    optim_config.adam_beta1 = opt.adam_beta1
+    optim_config.adam_beta2 = opt.adam_beta2
+    optim_config.adam_epsilon = opt.adam_epsilon
 else
     error('Unknow optimization method', opt.optim)
 end
+
+-- update param indices from model 
+model_utils.update_param_indices(model, opt, optim_config)
 
 print('Optimization configurations', optim_config) 
 

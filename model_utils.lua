@@ -449,4 +449,57 @@ function model_utils.finetune_vgg_bn(opt)
     return main_model
 end
 
+-- get params (weights + biases indinces) and save them to the config param
+-- used to get invdividual params from each layers, usefule for fine-tuning
+function model_utils.update_param_indices(model, opt, optim_config)
+    
+    local frozen_graph = model.modules[1]
+    assert(frozen_graph.frozen == true)
+
+    optim_config.frozen_start = 1
+
+    local total_elements = 0
+    for _, m in ipairs(frozen_graph.modules) do
+        if m.weight and m.bias then
+            local wlen = m.weight:nElement()
+            local blen = m.bias:nElement()
+            local mlen = wlen + blen
+            total_elements = total_elements + mlen
+        end
+    end
+    
+    optim_config.frozen_end = total_elements
+
+    local finetune_graph = model.modules[2]
+    assert(finetune_graph.frozen == false)
+
+    local bias_indices = {}
+    for _, m in ipairs(finetune_graph.modules) do
+       if m.weight and m.bias then
+
+            local wlen = m.weight:nElement()
+            local blen = m.bias:nElement()
+            local mlen = wlen + blen
+            table.insert(bias_indices, total_elements + wlen + 1)
+            table.insert(bias_indices, total_elements + mlen)
+
+            if m.name == opt.finetune_layer_name then
+                print('Fine tuning layer found!')
+                optim_config.ft_ind_start = total_elements + 1
+                optim_config.ft_ind_end = total_elements + mlen
+                optim_config.ftb_ind_start = total_elements + wlen + 1 -- fine tune bias index start
+                optim_config.ftb_ind_end = total_elements + mlen       -- fine tune bias index end
+            end
+
+            total_elements = total_elements + mlen
+       elseif m.weight or m.bias then
+           error('Layer that has either weight or bias')     
+       end
+    end
+
+    optim_config.bias_indices = bias_indices
+    assert(optim_config.ft_ind_start, 'Fine tuning layer not found')
+    
+end
+
 return model_utils
