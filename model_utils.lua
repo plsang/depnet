@@ -3,6 +3,8 @@ require 'cunn' -- otherwise, error: attempt to index field 'THNN' (a nil value)
 require 'cudnn'
 require 'loadcaffe'
 
+require 'MILLayer'
+
 local model_utils = {}
 
 function model_utils.load_vgg(opt)
@@ -32,6 +34,19 @@ function model_utils.init_finetuning_params(model, opt)
         end
     end
 
+end
+
+
+-- a building block for convultion neurals, with batch normalization
+function model_utils.build_conv_block(model, nInputDim, nOutputDim, kernel_size, step_size, pad_size, convName, reluName, bnName)
+    model:add(cudnn.SpatialConvolution(nInputDim, nOutputDim, kernel_size, kernel_size, step_size, step_size, pad_size, pad_size, 1))
+    model:get(#model).name = convName
+    if bnName then
+        model:add(cudnn.SpatialBatchNormalization(nOutputDim, 1e-3))
+        model:get(#model).name = bnName
+    end
+    model:add(cudnn.ReLU(true))
+    model:get(#model).name = reluName
 end
 
 -- Define the model, then copy parameters
@@ -254,7 +269,7 @@ function model_utils.finetune_vgg(opt)
     model:add(nn.Dropout(0.500000))
     model:get(#model).name = 'drop7'
     
-    model:add(cudnn.SpatialConvolution(4096, 1000, 1, 1, 1, 1, 0, 0, 1))
+    model:add(cudnn.SpatialConvolution(4096, opt.num_target, 1, 1, 1, 1, 0, 0, 1))
     model:get(#model).name = 'fc8'
     
     model:add(nn.View(-1):setNumInputDims(3)) -- 1x1x1000 --> 1000
@@ -283,8 +298,8 @@ function model_utils.finetune_vgg(opt)
         print('loading network from a vgg pretrained model')
         local model_vgg = model_utils.load_vgg(opt)
         local parameters_vgg = model_vgg:getParameters() -- all params as one flat variables
-        assert(parameters:nElement() == parameters_vgg:nElement())
-        parameters:copy(parameters_vgg)
+        -- assert(parameters:nElement() == parameters_vgg:nElement())
+        parameters[{{1,134260544}}]:copy(parameters_vgg[{{1,134260544}}])
         parameters_vgg = nil
         model_vgg = nil
     end
@@ -293,14 +308,101 @@ function model_utils.finetune_vgg(opt)
     return main_model
 end
 
--- a building block for convultion neurals, with batch normalization
-function model_utils.build_conv_block(model, nInputDim, nOutputDim, kernel_size, step_size, pad_size, convName, bnName, reluName)
-    model:add(cudnn.SpatialConvolution(nInputDim, nOutputDim, kernel_size, kernel_size, step_size, step_size, pad_size, pad_size, 1))
-    model:get(#model).name = convName
-    model:add(cudnn.SpatialBatchNormalization(nOutputDim, 1e-3))
-    model:get(#model).name = bnName
-    model:add(cudnn.ReLU(true))
-    model:get(#model).name = reluName
+
+-- Define a fine tuning network, that contains different groups.
+-- each group will have different learning rates
+function model_utils.mil_vgg(opt)
+    local main_model = nn.Sequential()
+    -- group 1: frozen weight
+    local model = nn.Sequential()
+    
+    -- learing rate & weight decay multipliers for this group
+    model.frozen = true
+    
+    model_utils.build_conv_block(model, 3, 64, 3, 1, 1, 'conv1_1', 'relu1_1')
+    model_utils.build_conv_block(model, 64, 64, 3, 1, 1, 'conv1_2', 'relu1_2')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool1'
+    
+    model_utils.build_conv_block(model, 64, 128, 3, 1, 1, 'conv2_1', 'relu2_1')
+    model_utils.build_conv_block(model, 128, 128, 3, 1, 1, 'conv2_2', 'relu2_2')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool2'
+    
+    main_model:add(model)
+    model = nil
+    
+    -- group 2: normal weight
+    local model = nn.Sequential()
+    -- learing rate & weight decay multipliers for this group
+    model.frozen = false
+    
+    model_utils.build_conv_block(model, 128, 256, 3, 1, 1, 'conv3_1', 'relu3_1')
+    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_2', 'relu3_2')
+    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_3', 'relu3_3')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool3'
+    
+    model_utils.build_conv_block(model, 256, 512, 3, 1, 1, 'conv4_1', 'relu4_1')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_2', 'relu4_2')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_3', 'relu4_3')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool4'
+    
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_1', 'relu5_1')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_2', 'relu5_2')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_3', 'relu5_3')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool5'
+    
+    model_utils.build_conv_block(model, 512, 4096, 7, 1, 0, 'fc6', 'relu6')
+    model:add(nn.Dropout(0.500000))
+    model:get(#model).name = 'drop6'
+    
+    model_utils.build_conv_block(model, 4096, 4096, 1, 1, 0, 'fc7', 'relu7')
+    model:add(nn.Dropout(0.500000))
+    model:get(#model).name = 'drop7'
+    
+    model:add(cudnn.SpatialConvolution(4096, opt.num_target, 1, 1, 1, 1, 0, 0, 1)) -- Nx4096x12x12 --> Nx1000x12x12
+    model:get(#model).name = 'fc8'
+    
+    model:add(nn.Sigmoid())
+    model:get(#model).name = 'sigmoid'
+    
+    model:add(nn.MILLayer(opt.mil_type))
+    model:get(#model).name = opt.mil_type
+    
+    -- model:add(nn.View(-1):setNumInputDims(3)) -- 1x1000x1x1 --> 1000
+    -- model:get(#model).name = 'torch_view'
+    
+    main_model:add(model)
+    model = nil
+    
+    cudnn.convert(main_model, cudnn)
+    
+    local parameters = main_model:getParameters() -- all params as one flat variables
+    
+    -- for k,v in pairs(model) do print (k,v) end
+    if opt.test_cp ~= '' then
+        print('loading network from a checkpoint ', opt.test_cp)
+        model_cp = torch.load(opt.test_cp)
+        local parameters_cp = model_cp.params
+        assert(parameters:nElement() == parameters_cp:nElement())
+        parameters:copy(parameters_cp)
+        model_cp = nil
+        parameters_cp = nil
+    else
+        print('loading network from a vgg pretrained model')
+        local model_vgg = model_utils.load_vgg(opt)
+        local parameters_vgg = model_vgg:getParameters() -- all params as one flat variables
+        -- assert(parameters:nElement() == parameters_vgg:nElement())
+        parameters[{{1,134260544}}]:copy(parameters_vgg[{{1,134260544}}])
+        parameters_vgg = nil
+        model_vgg = nil
+    end
+    collectgarbage() 
+    
+    return main_model
 end
 
 -- Define a fine tuning network, that contains different groups.
@@ -313,19 +415,19 @@ function model_utils.finetune_vgg_bn(opt)
     
     -- learing rate & weight decay multipliers for this group
     model.frozen = true
-    model_utils.build_conv_block(model, 3, 64, 3, 1, 1, 'conv1_1', 'bn1_1', 'relu1_1')
+    model_utils.build_conv_block(model, 3, 64, 3, 1, 1, 'conv1_1', 'relu1_1', 'bn1_1')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop1'
     
-    model_utils.build_conv_block(model, 64, 64, 3, 1, 1, 'conv1_2', 'bn1_2', 'relu1_2')
+    model_utils.build_conv_block(model, 64, 64, 3, 1, 1, 'conv1_2', 'relu1_2', 'bn1_2')
     model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
     model:get(#model).name = 'pool1'
     
-    model_utils.build_conv_block(model, 64, 128, 3, 1, 1, 'conv2_1', 'bn2_1', 'relu2_1')
+    model_utils.build_conv_block(model, 64, 128, 3, 1, 1, 'conv2_1', 'relu2_1', 'bn2_1')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop2'
     
-    model_utils.build_conv_block(model, 128, 128, 3, 1, 1, 'conv2_2', 'bn2_2', 'relu2_2')
+    model_utils.build_conv_block(model, 128, 128, 3, 1, 1, 'conv2_2', 'relu2_2', 'bn2_2')
     model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
     model:get(#model).name = 'pool2'
     
@@ -337,48 +439,48 @@ function model_utils.finetune_vgg_bn(opt)
     -- learing rate & weight decay multipliers for this group
     model.frozen = false
     
-    model_utils.build_conv_block(model, 128, 256, 3, 1, 1, 'conv3_1', 'bn3_1', 'relu3_1')
+    model_utils.build_conv_block(model, 128, 256, 3, 1, 1, 'conv3_1', 'relu3_1', 'bn3_1')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop3_1'
     
-    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_2', 'bn3_2', 'relu3_2')
+    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_2', 'relu3_2', 'bn3_2')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop3_2'
     
-    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_3', 'bn3_3', 'relu3_3')
+    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_3', 'relu3_3', 'bn3_3')
     model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
     model:get(#model).name = 'pool3'
     
-    model_utils.build_conv_block(model, 256, 512, 3, 1, 1, 'conv4_1', 'bn4_1', 'relu4_1')
+    model_utils.build_conv_block(model, 256, 512, 3, 1, 1, 'conv4_1', 'relu4_1', 'bn4_1')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop4_1'
     
-    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_2', 'bn4_2', 'relu4_2')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_2', 'relu4_2', 'bn4_2')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop4_2'
     
-    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_3', 'bn4_3', 'relu4_3')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_3', 'relu4_3', 'bn4_3')
     model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
     model:get(#model).name = 'pool4'
     
-    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_1', 'bn5_1', 'relu5_1')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_1', 'relu5_1', 'bn5_1')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop5_1'
     
-    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_2', 'bn5_2', 'relu5_2')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_2', 'relu5_2', 'bn5_2')
     model:add(nn.Dropout(0.5))
     model:get(#model).name = 'drop5_2'
     
-    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_3', 'bn5_3', 'relu5_3')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_3', 'relu5_3', 'bn5_3')
     model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
     model:get(#model).name = 'pool5'
     
     -- note: padding here is zero, otherwise, the output layer has 25,000 elements?
-    model_utils.build_conv_block(model, 512, 4096, 7, 1, 0, 'fc6', 'bn6', 'relu6')
+    model_utils.build_conv_block(model, 512, 4096, 7, 1, 0, 'fc6', 'relu6', 'bn6')
     model:add(nn.Dropout(0.500000))
     model:get(#model).name = 'drop6'
     
-    model_utils.build_conv_block(model, 4096, 4096, 1, 1, 0, 'fc7', 'bn7', 'relu7')
+    model_utils.build_conv_block(model, 4096, 4096, 1, 1, 0, 'fc7', 'relu7', 'bn7')
     model:add(nn.Dropout(0.500000))
     model:get(#model).name = 'drop7'
     
@@ -449,6 +551,26 @@ function model_utils.finetune_vgg_bn(opt)
     return main_model
 end
 
+function model_utils.load_model(opt)
+    local model = nil
+    
+    if opt.model_type == 'vgg' then
+        model = model_utils.finetune_vgg(opt)
+    elseif opt.model_type == 'vggbn' then
+        model = model_utils.finetune_vgg_bn(opt)
+    elseif opt.model_type == 'milmax' then
+        opt.mil_type = 'milmax'
+        model = model_utils.mil_vgg(opt)
+    elseif opt.model_type == 'milnor' then
+        opt.mil_type = 'milnor'
+        model = model_utils.mil_vgg(opt)
+    else
+        error('Unknown model type!', opt.mil_type)
+    end
+    
+    return model
+end
+    
 -- get params (weights + biases indinces) and save them to the config param
 -- used to get invdividual params from each layers, usefule for fine-tuning
 function model_utils.update_param_indices(model, opt, optim_config)

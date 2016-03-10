@@ -10,8 +10,6 @@ require 'CocoData'
 require 'MultilabelCrossEntropyCriterion'
 require 'eval_utils'
 
--- dbg = require 'debugger'
-
 local model_utils = require 'model_utils'
 local optim_utils = require 'optim_utils'
 
@@ -49,9 +47,10 @@ cmd:option('-ft_lr_mult', 1, 'learning multipier for the finetuning layer, same 
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
 cmd:option('-optim', 'adam', 'optimization method: sgd, adam')
-cmd:option('-learning_rate', 0.000015625, 'learning rate for sgd')
-cmd:option('-batch_norm', 0, 'batch normalization')
+cmd:option('-learning_rate', 1e-5, 'learning rate for sgd') -- msmil: 0.000015625
+cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
+cmd:option('-debug', 0, 'turn debug mode on/off')
 -- these options are for SGD
 cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
 cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
@@ -71,6 +70,8 @@ if opt.model_id == '' then
     opt.model_id = ('%s_b%d_lr%f').format(opt.optim, opt.batch_size, opt.learning_rate)
 end
 
+if opt.debug == 1 then dbg = require 'debugger' end
+
 -- set the manual seed
 torch.manualSeed(opt.seed)
 
@@ -86,7 +87,7 @@ local val_loader = CocoData{image_file_h5 = opt.val_image_file_h5,
     batch_size = opt.batch_size}
 
 if opt.save_cp_interval == 0 then 
-    opt.save_cp_interval = math.ceil(train_loader:getNumImages(), opt.batch_size)
+    opt.save_cp_interval = math.ceil(train_loader:getNumImages()/opt.batch_size)
 end
 
 -- 
@@ -95,12 +96,7 @@ print(opt)
 local eval = eval_utils()
 
 --
-local model = nil
-if opt.batch_norm == 0 then
-    model = model_utils.finetune_vgg(opt):cuda() 
-else
-    model = model_utils.finetune_vgg_bn(opt):cuda() 
-end
+local model = model_utils.load_model(opt):cuda()
 
 local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
 print(model.modules)
