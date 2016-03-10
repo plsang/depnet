@@ -61,11 +61,13 @@ function CocoData:getBatch(opt)
         image_batch[i] = img
         
         -- fetch label from h5 (FROM SHUFFLED INDEX)
-        local row_indptr = self.label_data:read('/data/indptr'):partial({shuffle_idx, shuffle_idx+1})
-        local col_indptr = self.label_data:read('/data/indices'):partial({row_indptr[1]+1, row_indptr[2]})
         
         local label_idx = torch.ByteTensor(1, self.num_target):zero() -- by default, torch does not initialize tensor
-        label_idx:scatter(2, col_indptr:long():add(1):view(1,-1), 1) -- add 1 to col_ind (Lua index starts at 1)
+        local row_indptr = self.label_data:read('/data/indptr'):partial({shuffle_idx, shuffle_idx+1})
+        if row_indptr[1] < row_indptr[2] then -- some row/image has no concept. this would prevent this case
+		local col_indptr = self.label_data:read('/data/indices'):partial({row_indptr[1]+1, row_indptr[2]})
+        	label_idx:scatter(2, col_indptr:long():add(1):view(1,-1), 1) -- add 1 to col_ind (Lua index starts at 1)
+	end
         label_batch[i] = label_idx
         
         idx = idx + 1
