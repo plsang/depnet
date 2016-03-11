@@ -21,33 +21,78 @@ $(DATA_ROOT)/mscoco2014_%_preprocessedimages_msmil.h5: $(MSCOCO_ROOT)/annotation
 		--images_root $(MSCOCO_ROOT)/images/$*2014 \
 		--images_size 565
 
-train5: 
+
+vgg-myconceptsv3: 
+	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-batch_size 1 -optim adam -ft_lr_mult 10 | tee log/train_1_vgg_myconceptsv3.log
+
+
+vgg-mydepsv4: 
+	CUDA_VISIBLE_DEVICES=3 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-batch_size 4 -optim adam -num_target 21034 -ft_lr_mult 10 -test_interval 1000 -num_test_image 400 -print_log_interval 1 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json \
+		| tee log/train_b4_vgg_mydepsv4.log
+
+milnor-myconceptsv3-b1:	
 	CUDA_VISIBLE_DEVICES=5 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
-		-batch_size 1 -test_interval 10000 | tee log/train_1.log
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 1 -optim adam -num_test_image 400 -test_interval 1000 -ft_lr_mult 10 -model_type milnor -print_log_interval 1 -bias_init -6.58 \
+		| tee log/train_b1_milnor_myconceptsv3.log
 
-
-train6: 
+milnor-myconceptsv3-b8:	
 	CUDA_VISIBLE_DEVICES=6 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
-		-batch_size 16 -learning_rate 2e-4 | tee log/train_16.log
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 8 -optim adam -num_test_image 400 -test_interval 1000 -ft_lr_mult 10 -model_type milnor -bias_init -6.58 -print_log_interval 1 \
+		| tee log/train_b8_milnor_myconceptsv3.log
 
 
-train7: 
+milmax-myconceptsv3-b8:	
 	CUDA_VISIBLE_DEVICES=7 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
-		-batch_size 32 -learning_rate 4e-4 | tee log/train_32.log
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 8 -optim adam -num_test_image 400 -test_interval 1000 -ft_lr_mult 10 -model_type milmax -bias_init 0 -print_log_interval 1 \
+		| tee log/train_b8_milmax_myconceptsv3.log
 
-train_dep20k: 
-	CUDA_VISIBLE_DEVICES=3 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+milnor-mydepsv4:	
+	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
-		-train_label_file_h5 
-		-batch_size 1 -learning_rate 4e-4 | tee log/train_32.log
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -ft_lr_mult 10 -model_type milnor -num_test_image 400 -num_target 21034 -print_log_interval 1 -bias_init -6.58 \
+		| tee log/train_b4_milnor_mydepsv4.log
 
-test1:
-	CUDA_VISIBLE_DEVICES=4 th -i test.lua -test_cp cp/model_b1_iter160000.t7 | tee log/test_b1_iter160000.log
+
+train7:	
+	CUDA_VISIBLE_DEVICES=7 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 1 -optim adam -num_test_image 400 -test_interval 100 \
+		-ft_lr_mult 10 -model_type milnor -bias_init -5 -print_log_interval 1 -debug 1
+
+test:
+	CUDA_VISIBLE_DEVICES=2 th -i test.lua -log_mode file -test_cp cp/model_adam_b16_iter10348.t7
+	CUDA_VISIBLE_DEVICES=2 th -i test.lua -log_mode file -test_cp cp/model_adam_b16_iter5174.t7
+	CUDA_VISIBLE_DEVICES=2 th -i test.lua -log_mode file -test_cp cp/model_adam_b1_iter82783.t7
+	CUDA_VISIBLE_DEVICES=2 th -i test.lua -log_mode file -test_cp cp/model_adam1_iter80000.t7
+	 
 
