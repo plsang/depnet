@@ -37,15 +37,16 @@ function eval_utils:cal_precision_recall(batch_output, batch_label)
     end   
 end
 
-function eval_utils:print_precision_recall()
+function eval_utils:print_precision_recall(logger)
     for t=1, self.threshold_values:size(1) do
         local precision = self.num_correct[t] / self.num_pred[t]
         local recall = self.num_correct[t] / self.num_gold
         local fscore = 2 * precision * recall / (precision + recall)
 
-        print(string.format(' ==> t=%.6f: precision/recall/f-score %.4f/%.4f/%.4f (%d/%d/%d)', 
+        local msg = string.format(' ==> t=%.6f: precision/recall/f-score %.4f/%.4f/%.4f (%d/%d/%d)', 
                 self.threshold_values[t], precision, recall, fscore, 
-                self.num_correct[t], self.num_pred[t], self.num_gold))
+                self.num_correct[t], self.num_pred[t], self.num_gold)
+        if logger then logger:info(msg) else print(msg) end
     end
 end
 
