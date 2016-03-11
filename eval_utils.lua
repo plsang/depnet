@@ -19,7 +19,7 @@ function eval_utils:cal_precision_recall(batch_output, batch_label)
     for i=1, batch_size do
         local pred = batch_output[i]
         local gold = batch_label[i]
-        self.num_gold = self.num_gold + gold:nonzero():size(1)
+        self.num_gold = self.num_gold + gold:nonzero():numel()
 
         for j = 1,self.threshold_values:size(1) do
             local t = self.threshold_values[j]

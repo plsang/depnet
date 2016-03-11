@@ -6,7 +6,7 @@ cjson = require 'cjson'
 require 'hdf5'
 
 -- Settings
-local coco_data_root = '/home/ec2-user/data/Microsoft_COCO'
+local coco_data_root = '/home/plsang/data/Microsoft_COCO'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -15,10 +15,10 @@ cmd:text()
 cmd:text('Options')
 
 -- Data input settings
-cmd:option('-h5_file', paths.concat(coco_data_root, 'mscoco2014_train_myconceptsv3.h5'), 'h5 file')
-cmd:option('-jsonl_file', paths.concat(coco_data_root, 'mscoco2014_train_myconceptsv3.jsonl'), 'jsonl file')
-cmd:option('-vocab_file', paths.concat(coco_data_root, 'mscoco2014_train_myconceptsv3vocab.json'), 'vocab file')
-cmd:option('-concept_type', 'coarse_lemmas', 'type of concepts: coarse_lemmas, coarse_dependencies')
+cmd:option('-h5_file', paths.concat(coco_data_root, 'mscoco2014_train_mydepsv4.h5'), 'h5 file')
+cmd:option('-jsonl_file', paths.concat(coco_data_root, 'mscoco2014_train_mydepsv4.jsonl'), 'jsonl file')
+cmd:option('-vocab_file', paths.concat(coco_data_root, 'mscoco2014_train_mydepsv4vocab.json'), 'vocab file')
+cmd:option('-concept_type', 'coarse_dependencies', 'type of concepts: coarse_lemmas, coarse_dependencies')
 cmd:option('-id', 'image_id', 'id key')
   
 local function read_json(path)
@@ -59,6 +59,10 @@ local start = os.clock()
 
 for i=1,#concepts do
     row_indptr = h5_data:read('/data/indptr'):partial({i,i+1})
+    if row_indptr[1] == row_indptr[2] then 
+	print('file with no concept, i =', i)
+	print(concepts[i][opt.concept_type])
+    else
     col_indptr = h5_data:read('/data/indices'):partial({row_indptr[1]+1, row_indptr[2]})
     
     local function inTable(tbl, item)
@@ -75,12 +79,13 @@ for i=1,#concepts do
             os.exit()
         end    
     end
-    
-    local index = torch.ByteTensor(1000):zero()
-    print(col_indptr:long():view(1,-1))
-    index:scatter(2, col_indptr:long():add(1):view(1,-1), 1)
-    print(index)
-    break
+    end
+--    local index = torch.ByteTensor(1000):zero()
+--    print(col_indptr)
+--    print(col_indptr:long():view(1,-1))
+--    index:scatter(1, col_indptr:long():add(1):view(1,-1), 1)
+--    print(index)
+--    break
 end
 
 print('Test passed!')
