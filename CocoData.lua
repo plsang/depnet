@@ -39,6 +39,10 @@ function CocoData:getNumImages()
     return self.num_images
 end
 
+function CocoData:getNumTargets()
+    return self.num_target
+end
+
 function CocoData:getBatch(opt)
     local image_batch = torch.ByteTensor(self.batch_size, self.num_channels, self.image_size, self.image_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
