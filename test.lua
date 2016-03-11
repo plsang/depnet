@@ -31,7 +31,7 @@ cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger val
 cmd:option('-phase', 'test', 'phase (train/test)')
 cmd:option('-log_mode', 'console', 'console/file.  filename is the testing model file + .log')
 cmd:option('-log_dir', 'log', 'log dir')
-cmd:option('-version', '1.4', 'release version')    
+cmd:option('-version', 'v1.4', 'release version')    
 cmd:option('-print_log_interval', 1000, 'Number of test image.')
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')
 
@@ -96,6 +96,6 @@ for iter=1, num_iters do
 end    
 
 logger:info('Final performanace:')
-logger:info('==> map = ', map/num_iters)
+logger:info('==> map = ' .. map/num_iters)
 eval:print_precision_recall(logger)    
 
