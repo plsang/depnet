@@ -52,11 +52,12 @@ end
 
 -- average precision per image
 function eval_utils:cal_average_precision(pred, gold)
-    ap = 0
-    sorted_pred, idx = torch.sort(pred, 1, true) -- sort descending 
-    rank_idx = torch.nonzero(gold):squeeze()
-    
+    local ap = 0
+    local sorted_pred, idx = torch.sort(pred, 1, true) -- sort descending 
+    local rank_idx = torch.nonzero(gold)
+
     if rank_idx:dim() > 0 then
+        rank_idx = rank_idx:squeeze(2)
         rank_idx:apply(function(x) local i=idx:eq(x):nonzero():squeeze() return i end)
         sorted_idx = torch.sort(rank_idx)
    

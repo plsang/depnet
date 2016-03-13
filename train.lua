@@ -68,7 +68,7 @@ local opt = cmd:parse(arg)
 
 if opt.model_id == '' then 
     -- opt.model_id = ('%s_b%d_lr%f').format(opt.optim, opt.batch_size, opt.learning_rate)
-    opt.model_id = string.format('%s_%s_b%d_lr%f', opt.optim, opt.model_type, opt.batch_size, opt.learning_rate)
+    opt.model_id = string.format('%s_%s_b%d_bias%f_lr%f', opt.optim, opt.model_type, opt.batch_size, opt.bias_init, opt.learning_rate)
 end
 
 if opt.debug == 1 then dbg = require 'debugger' end
