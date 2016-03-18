@@ -2,7 +2,7 @@ require 'nn'
 require 'cunn' -- otherwise, error: attempt to index field 'THNN' (a nil value)
 require 'cudnn'
 require 'loadcaffe'
-
+require 'nn.SpatialMIL'
 require 'MILLayer'
 
 local model_utils = {}
@@ -370,6 +370,7 @@ function model_utils.mil_vgg(opt)
     model:get(#model).name = 'sigmoid'
     
     model:add(nn.MILLayer(opt.mil_type))
+    --model:add(nn.SpatialMIL(opt.mil_type))
     model:get(#model).name = opt.mil_type
     
     -- model:add(nn.View(-1):setNumInputDims(3)) -- 1x1000x1x1 --> 1000

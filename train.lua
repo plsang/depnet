@@ -24,8 +24,9 @@ cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed ima
 cmd:option('-train_label_file_h5', 'mscoco2014_train_myconceptsv3.h5', 'file name of the prepressed train label data')
 cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
 cmd:option('-vocab_file', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
-cmd:option('-num_target', 1000, 'Number of target concepts')
-cmd:option('-num_test_image', 1600, 'Number of test image.')
+cmd:option('-concept_type', 'myconceptsv3', 'name of concept type, e.g., myconceptsv3, mydepsv4)
+cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
+cmd:option('-num_test_image', 400, 'Number of test image, -1 for testing all (40504)')
 cmd:option('-test_interval', 10000, 'Number of test image.')
 cmd:option('-print_log_interval', 20, 'Number of test image.')
 cmd:option('-batch_size', 1, 'Number of image per batch')
@@ -68,7 +69,8 @@ local opt = cmd:parse(arg)
 
 if opt.model_id == '' then 
     -- opt.model_id = ('%s_b%d_lr%f').format(opt.optim, opt.batch_size, opt.learning_rate)
-    opt.model_id = string.format('%s_%s_b%d_bias%f_lr%f', opt.optim, opt.model_type, opt.batch_size, opt.bias_init, opt.learning_rate)
+    opt.model_id = string.format('%s_%s_%s_b%d_bias%f_lr%f', 
+            opt.concept_type, opt.optim, opt.model_type, opt.batch_size, opt.bias_init, opt.learning_rate)
 end
 
 if opt.debug == 1 then dbg = require 'debugger' end
@@ -92,6 +94,9 @@ if opt.save_cp_interval == 0 then
 end
 
 -- 
+if opt.num_target == -1 then opt.num_target = train_loader:getNumTargets() end
+if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
+
 print(opt)
 
 local eval = eval_utils()
