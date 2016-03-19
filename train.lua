@@ -7,7 +7,8 @@ require 'cudnn'
 local cjson = require 'cjson'
 
 require 'CocoData'
-require 'MultilabelCrossEntropyCriterion'
+--require 'MultilabelCrossEntropyCriterion'
+require 'nn.MultiLabelCrossEntropyCriterion'
 require 'eval_utils'
 
 local model_utils = require 'model_utils'
@@ -24,7 +25,7 @@ cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed ima
 cmd:option('-train_label_file_h5', 'mscoco2014_train_myconceptsv3.h5', 'file name of the prepressed train label data')
 cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
 cmd:option('-vocab_file', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
-cmd:option('-concept_type', 'myconceptsv3', 'name of concept type, e.g., myconceptsv3, mydepsv4')
+cmd:option('-concept_type', '', 'name of concept type, e.g., myconceptsv3, mydepsv4, empty for auto detect from train_label_file_h5')
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_image', 400, 'Number of test image, -1 for testing all (40504)')
 cmd:option('-test_interval', 10000, 'Number of test image.')
@@ -49,7 +50,7 @@ cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger val
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
 cmd:option('-optim', 'adam', 'optimization method: sgd, adam')
 cmd:option('-learning_rate', 1e-5, 'learning rate for sgd') -- msmil: 0.000015625
-cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')
+cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
 cmd:option('-debug', 0, 'turn debug mode on/off')
 -- these options are for SGD
@@ -67,18 +68,12 @@ cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
 cmd:text()
 local opt = cmd:parse(arg)
 
-if opt.model_id == '' then 
-    -- opt.model_id = ('%s_b%d_lr%f').format(opt.optim, opt.batch_size, opt.learning_rate)
-    opt.model_id = string.format('%s_%s_%s_b%d_bias%f_lr%f', 
-            opt.concept_type, opt.optim, opt.model_type, opt.batch_size, opt.bias_init, opt.learning_rate)
-end
-
 if opt.debug == 1 then dbg = require 'debugger' end
 
 -- set the manual seed
 torch.manualSeed(opt.seed)
 
---- loading Coco data
+-- loading Coco data
 local train_loader = CocoData{image_file_h5 = opt.train_image_file_h5, 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.train_label_file_h5), 
     num_target = opt.num_target, 
@@ -89,22 +84,26 @@ local val_loader = CocoData{image_file_h5 = opt.val_image_file_h5,
     num_target = opt.num_target, 
     batch_size = opt.batch_size}
 
+-- Update some default options
+if opt.num_target == -1 then opt.num_target = train_loader:getNumTargets() end
+if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
+if opt.concept_type == '' then opt.concept_type = string.split(paths.basename(opt.train_label_file_h5, '.h5'), '_')[3] end
+if opt.model_id == '' then 
+    opt.model_id = string.format('%s_%s_%s_b%d_bias%f_lr%f', 
+            opt.concept_type, opt.model_type, opt.optim, opt.batch_size, opt.bias_init, opt.learning_rate)
+end
 if opt.save_cp_interval == 0 then 
     opt.save_cp_interval = math.ceil(train_loader:getNumImages()/opt.batch_size)
 end
-
--- 
-if opt.num_target == -1 then opt.num_target = train_loader:getNumTargets() end
-if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
-
 print(opt)
+------------------------------------------
 
 local eval = eval_utils()
-
---
 local model = model_utils.load_model(opt):cuda()
 
-local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
+-- local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda() -- Lua version
+local criterion = nn.MultiLabelCrossEntropyCriterion(opt.loss_weight):cuda() -- C/Cuda version
+
 print(model.modules)
 
 -- Initialization
@@ -199,6 +198,7 @@ local function save_model()
     cp.loss_history = loss_history
     cp.val_loss_history = val_loss_history
     cp.params = params
+    
     -- saving vocabulary
     local vocab_path = paths.concat(opt.coco_data_root, opt.vocab_file)
     if paths.filep(vocab_path) then
@@ -219,17 +219,17 @@ end
 -- eval_loss()
 
 model:training()
-
+local timer = torch.Timer() 
 -- Training
 while true do 
 
     iter = iter + 1
-    local timer = torch.Timer() 
+    timer:reset()
     
     -- Call forward/backward with full params input
     local loss = feval(params)
    
-     -- Now update params acordingly
+    -- Now update params acordingly
     if opt.optim == 'sgd' then
         optim_utils.sgd(params, grad_params, optim_config)
     elseif opt.optim == 'adam' then
@@ -242,17 +242,17 @@ while true do
         loss_history[iter] = loss
         print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
                 os.date(), iter, opt.loss_weight*loss, optim_config.learningRate, timer:time().real))
-        collectgarbage() 
     end
    
     -- test loss
     if (iter % opt.test_interval == 0) then
         local val_loss = eval_loss()
         val_loss_history[iter] = val_loss
+        collectgarbage()
     end
     
     -- save checkpoints
-    if (iter % opt.save_cp_interval == 0 or iter == opt.max_iters) then
+    if (iter % opt.save_cp_interval == 0) then
         save_model()
     end
 

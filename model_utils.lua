@@ -10,13 +10,10 @@ local model_utils = {}
 function model_utils.load_vgg(opt)
     vgg_model = loadcaffe.load(opt.cnn_proto, opt.cnn_model, opt.back_end)
 
-    ---
     -- print('Removing the softmax layer')
     table.remove(vgg_model['modules'])  -- equivalent to pop
     
-    criterion = nn.MultilabelCrossEntropyCriterion():cuda()
-    
-    return vgg_model, criterion
+    return vgg_model
 end
 
 function model_utils.init_finetuning_params(model, opt)
@@ -36,7 +33,6 @@ function model_utils.init_finetuning_params(model, opt)
 
 end
 
-
 -- a building block for convultion neurals, with batch normalization
 function model_utils.build_conv_block(model, nInputDim, nOutputDim, kernel_size, step_size, pad_size, convName, reluName, bnName)
     model:add(cudnn.SpatialConvolution(nInputDim, nOutputDim, kernel_size, kernel_size, step_size, step_size, pad_size, pad_size, 1))
@@ -48,6 +44,90 @@ function model_utils.build_conv_block(model, nInputDim, nOutputDim, kernel_size,
     model:add(cudnn.ReLU(true))
     model:get(#model).name = reluName
 end
+
+-- Build basic vgg net from conv blocks
+function model_utils.build_vgg_net(num_target)
+    local main_model = nn.Sequential()
+    -- group 1: frozen weight
+    local model = nn.Sequential()
+    
+    -- learing rate & weight decay multipliers for this group
+    model.frozen = true
+    
+    model_utils.build_conv_block(model, 3, 64, 3, 1, 1, 'conv1_1', 'relu1_1')
+    model_utils.build_conv_block(model, 64, 64, 3, 1, 1, 'conv1_2', 'relu1_2')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool1'
+    
+    model_utils.build_conv_block(model, 64, 128, 3, 1, 1, 'conv2_1', 'relu2_1')
+    model_utils.build_conv_block(model, 128, 128, 3, 1, 1, 'conv2_2', 'relu2_2')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool2'
+    
+    main_model:add(model)
+    model = nil
+    
+    -- group 2: normal weight
+    local model = nn.Sequential()
+    -- learing rate & weight decay multipliers for this group
+    model.frozen = false
+    
+    model_utils.build_conv_block(model, 128, 256, 3, 1, 1, 'conv3_1', 'relu3_1')
+    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_2', 'relu3_2')
+    model_utils.build_conv_block(model, 256, 256, 3, 1, 1, 'conv3_3', 'relu3_3')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool3'
+    
+    model_utils.build_conv_block(model, 256, 512, 3, 1, 1, 'conv4_1', 'relu4_1')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_2', 'relu4_2')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv4_3', 'relu4_3')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool4'
+    
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_1', 'relu5_1')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_2', 'relu5_2')
+    model_utils.build_conv_block(model, 512, 512, 3, 1, 1, 'conv5_3', 'relu5_3')
+    model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
+    model:get(#model).name = 'pool5'
+    
+    model_utils.build_conv_block(model, 512, 4096, 7, 1, 0, 'fc6', 'relu6')
+    model:add(nn.Dropout(0.500000))
+    model:get(#model).name = 'drop6'
+    
+    model_utils.build_conv_block(model, 4096, 4096, 1, 1, 0, 'fc7', 'relu7')
+    model:add(nn.Dropout(0.500000))
+    model:get(#model).name = 'drop7'
+    
+    model:add(cudnn.SpatialConvolution(4096, num_target, 1, 1, 1, 1, 0, 0, 1)) -- Nx4096x12x12 --> Nx1000x12x12
+    model:get(#model).name = 'fc8'
+    
+    model:add(nn.Sigmoid())
+    model:get(#model).name = 'sigmoid'
+    
+    main_model:add(model)
+    
+    return main_model
+    
+end
+
+-- to replace function finetune_vgg
+function model_utils.vgg_net(opt)
+    local model = model_utils.build_vgg_net(opt.num_target)
+    model:add(nn.View(-1):setNumInputDims(3)) -- 1x1x1000 --> 1000
+    model:get(#model).name = 'torch_view'
+    return model
+end
+
+-- to replace function mil_vgg
+function model_utils.mil_net(opt)
+    local model = model_utils.build_vgg_net(opt.num_target)
+    -- model:add(nn.MILLayer(opt.mil_type))
+    -- nn.SpatialMIL is C/CUDA version of MILLayer
+    model:add(nn.SpatialMIL(opt.mil_type)) 
+    model:get(#model).name = opt.mil_type
+    return model
+end
+
 
 -- Define the model, then copy parameters
 function model_utils.define_vgg(opt)
@@ -173,6 +253,8 @@ function model_utils.define_vgg(opt)
     
     return model
 end
+
+
 
 
 -- Define a fine tuning network, that contains different groups.
@@ -556,19 +638,49 @@ function model_utils.load_model(opt)
     local model = nil
     
     if opt.model_type == 'vgg' then
-        model = model_utils.finetune_vgg(opt)
+        model = model_utils.vgg_net(opt)
     elseif opt.model_type == 'vggbn' then
         model = model_utils.finetune_vgg_bn(opt)
     elseif opt.model_type == 'milmax' then
         opt.mil_type = 'milmax'
-        model = model_utils.mil_vgg(opt)
+        model = model_utils.mil_net(opt)
     elseif opt.model_type == 'milnor' then
         opt.mil_type = 'milnor'
-        model = model_utils.mil_vgg(opt)
+        model = model_utils.mil_net(opt)
+    elseif opt.model_type == 'milmaxnor' then
+        opt.mil_type = 'milmaxnor'
+        model = model_utils.mil_net(opt)
     else
-        error('Unknown model type!', opt.mil_type)
+        error('Unknown model type!', opt.model_type)
     end
     
+    if opt.back_end == 'cudnn' then
+        cudnn.convert(model, cudnn)
+    end
+    
+    -- copy parameters from the VGG16 network
+    local parameters = model:getParameters() -- all params as one flat variables
+    
+    -- for k,v in pairs(model) do print (k,v) end
+    if opt.test_cp ~= '' then
+        print('loading network from a checkpoint ', opt.test_cp)
+        model_cp = torch.load(opt.test_cp)
+        local parameters_cp = model_cp.params
+        assert(parameters:nElement() == parameters_cp:nElement(), 
+            'checkpoint network is not compatible with ' .. opt.model_type)
+        parameters:copy(parameters_cp)
+        model_cp = nil
+        parameters_cp = nil
+    else
+        print('loading network from a vgg pretrained model')
+        local model_vgg = model_utils.load_vgg(opt)
+        local parameters_vgg = model_vgg:getParameters() -- all params as one flat variables
+        parameters[{{1,134260544}}]:copy(parameters_vgg[{{1,134260544}}])
+        parameters_vgg = nil
+        model_vgg = nil
+    end
+    
+    collectgarbage() 
     return model
 end
     
