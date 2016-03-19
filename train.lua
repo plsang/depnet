@@ -24,7 +24,7 @@ cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed ima
 cmd:option('-train_label_file_h5', 'mscoco2014_train_myconceptsv3.h5', 'file name of the prepressed train label data')
 cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
 cmd:option('-vocab_file', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
-cmd:option('-concept_type', 'myconceptsv3', 'name of concept type, e.g., myconceptsv3, mydepsv4)
+cmd:option('-concept_type', 'myconceptsv3', 'name of concept type, e.g., myconceptsv3, mydepsv4')
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_image', 400, 'Number of test image, -1 for testing all (40504)')
 cmd:option('-test_interval', 10000, 'Number of test image.')
