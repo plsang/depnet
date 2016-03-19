@@ -43,8 +43,8 @@ function CocoData:getNumTargets()
     return self.num_target
 end
 
-function CocoData:getBatch(opt)
-    local image_batch = torch.ByteTensor(self.batch_size, self.num_channels, self.image_size, self.image_size)
+function CocoData:getBatch(label_only)
+    local image_batch = label_only or torch.ByteTensor(self.batch_size, self.num_channels, self.image_size, self.image_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
     local image_ids = torch.LongTensor(self.batch_size)
     local idx = self.iterator
@@ -59,19 +59,19 @@ function CocoData:getBatch(opt)
         
         image_ids[i] = img_id1
         
-        -- fetch the image from h5
-        local img = self.image_data:read('/images'):partial({idx,idx},{1, self.num_channels},
-                            {1, self.image_size},{1,self.image_size})
-        image_batch[i] = img
+        if not label_only then
+            -- fetch the image from h5
+            image_batch[i] = self.image_data:read('/images'):partial({idx,idx},{1, self.num_channels},
+                                {1, self.image_size},{1,self.image_size})
+        end
         
         -- fetch label from h5 (FROM SHUFFLED INDEX)
-        
         local label_idx = torch.ByteTensor(1, self.num_target):zero() -- by default, torch does not initialize tensor
         local row_indptr = self.label_data:read('/data/indptr'):partial({shuffle_idx, shuffle_idx+1})
         if row_indptr[1] < row_indptr[2] then -- some row/image has no concept. this would prevent this case
-		local col_indptr = self.label_data:read('/data/indices'):partial({row_indptr[1]+1, row_indptr[2]})
-        	label_idx:scatter(2, col_indptr:long():add(1):view(1,-1), 1) -- add 1 to col_ind (Lua index starts at 1)
-	end
+            local col_indptr = self.label_data:read('/data/indices'):partial({row_indptr[1]+1, row_indptr[2]})
+            label_idx:scatter(2, col_indptr:long():add(1):view(1,-1), 1) -- add 1 to col_ind (Lua index starts at 1)
+        end
         label_batch[i] = label_idx
         
         idx = idx + 1
