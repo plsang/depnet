@@ -30,7 +30,7 @@ cmd:option('-val_label_file_h5_task2', 'mscoco2014_val_mydepsv4.h5', 'file name 
 
 cmd:option('-vocab_file_task1', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
 cmd:option('-vocab_file_task2', 'mscoco2014_train_mydepsv4vocab.json', 'saving a copy of the vocabulary that was used for training')
-cmd:option('-concept_type', 'myconceptsv3-mydepsv4', 'name of concept type, e.g., myconceptsv3, mydepsv4, empty for auto detect from train_label_file_h5')
+cmd:option('-concept_type', 'multitask', 'name of concept type, e.g., myconceptsv3, mydepsv4, empty for auto detect from train_label_file_h5')
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_image', 400, 'Number of test image, -1 for testing all (40504)')
 cmd:option('-test_interval', 10000, 'Number of test image.')
@@ -40,7 +40,8 @@ cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CN
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
 cmd:option('-max_iters', 1000000)
-cmd:option('-save_cp_interval', 0, 'to save a check point every interval number of iterations')
+cmd:option('-max_epochs', 10)
+cmd:option('-save_cp_interval', -1, 'to save a check point every interval number of iterations')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
@@ -58,6 +59,7 @@ cmd:option('-learning_rate', 1e-5, 'learning rate for sgd') -- msmil: 0.00001562
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
 cmd:option('-debug', 0, 'turn debug mode on/off')
+cmd:option('-multitask_type', 1, '1: concate, 2: alternate')
 -- these options are for SGD
 cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
 cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
@@ -68,7 +70,6 @@ cmd:option('-weight_decay', 0.0005, 'momentum for sgd')
 cmd:option('-adam_beta1', 0.9, 'momentum for adam')
 cmd:option('-adam_beta2', 0.999, 'momentum for adam')
 cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
---
 
 cmd:text()
 local opt = cmd:parse(arg)
@@ -97,11 +98,12 @@ if opt.num_target == -1 then opt.num_target = train_loader_task1:getNumTargets()
 if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
 if opt.concept_type == '' then opt.concept_type = string.split(paths.basename(opt.train_label_file_h5, '.h5'), '_')[3] end
 if opt.model_id == '' then 
-    opt.model_id = string.format('%s_%s_%s_b%d_bias%f_lr%f', 
-            opt.concept_type, opt.model_type, opt.optim, opt.batch_size, opt.bias_init, opt.learning_rate)
+    opt.model_id = string.format('%s_%s_mt%d_%s_b%d_bias%f_lr%f', 
+            opt.concept_type, opt.model_type, opt.multitask_type, opt.optim, opt.batch_size, opt.bias_init, opt.learning_rate)
 end
-if opt.save_cp_interval == 0 then 
-    opt.save_cp_interval = math.ceil(train_loader_task1:getNumImages()/opt.batch_size)
+opt.iter_per_epoch = math.ceil(train_loader_task1:getNumImages()/opt.batch_size)
+if opt.save_cp_interval <= 0 then 
+    opt.save_cp_interval = opt.iter_per_epoch
 end
 print(opt)
 ------------------------------------------
@@ -148,6 +150,9 @@ model_utils.update_param_indices(model, opt, optim_config)
 
 print('Optimization configurations', optim_config) 
 
+local n1 = train_loader_task1:getNumTargets()
+local n2 = train_loader_task2:getNumTargets()
+
 local function eval_loss()
     model:evaluate()
     val_loader_task1:reset() 
@@ -164,9 +169,6 @@ local function eval_loss()
     local map_task1 = 0
     local map_task2 = 0
     local map_all = 0
-    
-    local n1 = train_loader_task1:getNumTargets()
-    local n2 = train_loader_task2:getNumTargets()
     
     for iter=1, eval_iters do
         local data1 = val_loader_task1:getBatch() -- get image and label batches
@@ -206,6 +208,13 @@ local function eval_loss()
     return loss
 end
 
+-- MAIN LOOP --- 
+local iter = 0
+local epoch = 0
+local loss_history = {}
+local val_loss_history = {}
+
+-- callback function
 local function feval(x)
     if x ~= params then params:copy(x) end
     grad_params:zero()
@@ -217,21 +226,35 @@ local function feval(x)
     local labels = torch.cat(data1.labels, data2.labels, 2):cuda()
     
     local outputs = model:forward(images)
-    local loss = criterion:forward(outputs, labels)
-    local df_do = criterion:backward(outputs, labels)
+    local loss, tmp_df_do
+    local df_do = torch.Tensor(opt.batch_size, opt.num_target):zero():cuda()
+    
+    if opt.multitask_type == 1 then
+        loss = criterion:forward(outputs, labels)
+        tmp_df_do = criterion:backward(outputs, labels)
+        df_do:copy(tmp_df_do)
+        
+    elseif opt.multitask_type == 2 then -- alternative learning
+        if iter % 2 == 1 then
+            loss = criterion:forward(outputs[{{},{1,n1}}], labels[{{},{1,n1}}])
+            tmp_df_do = criterion:backward(outputs[{{},{1,n1}}], labels[{{},{1,n1}}])
+            df_do[{{},{1,n1}}]:copy(tmp_df_do)
+        else
+            loss = criterion:forward(outputs[{{},{n1+1,n1+n2}}], labels[{{},{n1+1,n1+n2}}])
+            tmp_df_do = criterion:backward(outputs[{{},{n1+1,n1+n2}}], labels[{{},{n1+1,n1+n2}}])
+            df_do[{{},{n1+1,n1+n2}}]:copy(tmp_df_do)
+        end
+    else
+        error('Unknown multitask type', opt.multitask_type)
+    end
     
     model:backward(images, df_do)
     return loss
 end
 
--- MAIN LOOP --- 
-local iter = 0
-local loss_history = {}
-local val_loss_history = {}
-
 -- Save model
 local function save_model()
-    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_iter' .. iter  .. '.t7')
+    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_epoch' .. epoch  .. '.t7')
     local cp = {}
     cp.opt = opt
     cp.iter = iter
@@ -271,7 +294,8 @@ end
 -- eval_loss()
 
 model:training()
-local timer = torch.Timer() 
+local timer = torch.Timer()
+
 -- Training
 while true do 
 
@@ -314,8 +338,12 @@ while true do
         print('new learning rate', config.learningRate)
     end
     
+    if iter % opt.iter_per_epoch == 0 then
+        epoch = epoch + 1
+    end
+    
     -- Break condition
-    if iter >= opt.max_iters then 
+    if iter >= opt.max_iters or epoch >= opt.max_epochs then 
         break 
     end
 end    

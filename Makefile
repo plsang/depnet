@@ -30,7 +30,7 @@ vgg-myconceptsv3:
 
 
 vgg-mydepsv4: 
-	CUDA_VISIBLE_DEVICES=5 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
@@ -50,7 +50,7 @@ vgg-mydepsv4-bias:
 		2>&1 | tee log/train_b4_vgg_mydepsv4_bias.log
 
 milnor-myconceptsv3-b1:	
-	CUDA_VISIBLE_DEVICES=5 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
 		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
@@ -109,6 +109,19 @@ milnor-mydepsv4:
 		-num_target 21034 -print_log_interval 1 -bias_init -6.58 \
 		2>&1 | tee log/train_b4_milnor_mydepsv4.log
 
+milmaxnor-mydepsv4:	
+	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -ft_lr_mult 10 -model_type milmaxnor -num_test_image 400 \
+		-num_target 21034 -print_log_interval 1 -bias_init -6.58 \
+		2>&1 | tee log/train_b4_milmaxnor_mydepsv4.log
+
 milmax-mydepsv4:	
 	CUDA_VISIBLE_DEVICES=6 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
@@ -119,8 +132,8 @@ milmax-mydepsv4:
 		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
 		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
 		-batch_size 4 -optim adam -test_interval 1000 -ft_lr_mult 10 -model_type milmax -num_test_image 400 \
-		-num_target 21034 -print_log_interval 1 -bias_init 0 \
-		2>&1 | tee log/train_b4_milmax_mydepsv4.log
+		-print_log_interval 1 -bias_init 0 \
+		2>&1 | tee log/train_b4_milmaxnor_mydepsv4.log
 
 train7:	
 	CUDA_VISIBLE_DEVICES=7 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
@@ -149,3 +162,32 @@ test_mil:
 	CUDA_VISIBLE_DEVICES=7 th test.lua -log_mode file -test_cp cp/model_adam_milnor_b4_lr0.000010_iter20696_mydepsv4.t7 \
 			-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
 			-val_label_file_h5 mscoco2014_val_mydepsv4.h5 -model_type milnor
+
+
+#### MULTI TASKS
+
+multitask-milmaxnor-mt1:	
+	CUDA_VISIBLE_DEVICES=4 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -ft_lr_mult 10 -num_test_image 400 \
+		-print_log_interval 1 -bias_init -6.58 -model_type milmaxnor -multitask_type 1 \
+		2>&1 | tee log/train_b4_milmaxnor_multitask_mt1.log
+
+multitask-milmaxnor-mt2:	
+	CUDA_VISIBLE_DEVICES=1 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -ft_lr_mult 10 -num_test_image 400 \
+		-print_log_interval 1 -bias_init -6.58 -model_type milmaxnor -multitask_type 2 \
+		2>&1 | tee log/train_b4_milmaxnor_multitask_mt2.log
+
+multitask-test:
+	CUDA_VISIBLE_DEVICES=4 th test_multitask.lua -log_mode console -test_cp cp/model_myconceptsv3-mydepsv4_milmaxnor_adam_b4_bias-6.580000_lr0.000010_epoch0.t7 \
+			-val_image_file_h5 data/mscoco2014_val_preprocessedimages_msmil.h5 \
+			-model_type milmaxnor -print_log_interval 10
+
