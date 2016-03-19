@@ -106,7 +106,10 @@ end
 print(opt)
 ------------------------------------------
 
-local eval = eval_utils()
+local eval_task1 = eval_utils()
+local eval_task2 = eval_utils()
+local eval_all = eval_utils()
+
 local model = model_utils.load_model(opt):cuda()
 
 -- local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda() -- Lua version
@@ -147,13 +150,24 @@ print('Optimization configurations', optim_config)
 
 local function eval_loss()
     model:evaluate()
-    val_loader:reset() -- reset interator
-    eval:reset()
+    val_loader_task1:reset() 
+    val_loader_task2:reset() 
+    
+    eval_task1:reset()
+    eval_task2:reset()
+    eval_all:reset()
     
     print(' ==> evaluating ...') 
     local eval_iters = torch.ceil(opt.num_test_image/opt.batch_size)
     local total_loss = 0
-    local map = 0
+    
+    local map_task1 = 0
+    local map_task2 = 0
+    local map_all = 0
+    
+    local n1 = train_loader_task1:getNumTargets()
+    local n2 = train_loader_task2:getNumTargets()
+    
     for iter=1, eval_iters do
         local data1 = val_loader_task1:getBatch() -- get image and label batches
         local data2 = val_loader_task2:getBatch(true) -- get label only
@@ -164,21 +178,30 @@ local function eval_loss()
         local iter_loss = criterion:forward(outputs, labels:cuda())
         total_loss = total_loss + iter_loss 
         
-        eval:cal_precision_recall(outputs, data.labels)
-        local batch_map = eval:cal_mean_average_precision(outputs:float(), data.labels)
-        map = map + batch_map
+        eval_task1:cal_precision_recall(outputs[{{},{1,n1}}], labels[{{},{1,n1}}])
+        eval_task2:cal_precision_recall(outputs[{{},{n1+1,n1+n2}}], labels[{{},{n1+1,n1+n2}}])
+        eval_all:cal_precision_recall(outputs, labels)
         
-        -- handle the case when the number of test images are not divisible by the batch_size
-        if iter == num_iters then
-
-        end
+        local batch_map_task1 = eval_task1:cal_mean_average_precision(outputs[{{},{1,n1}}]:float(), labels[{{},{1,n1}}])
+        local batch_map_task2 = eval_task2:cal_mean_average_precision(outputs[{{},{n1+1,n1+n2}}]:float(), labels[{{},{n1+1,n1+n2}}])
+        local batch_map_all = eval_all:cal_mean_average_precision(outputs:float(), labels)
+        
+        map_task1 = map_task1 + batch_map_task1
+        map_task2 = map_task2 + batch_map_task2
+        map_all = map_all + batch_map_all
     end    
     
     local loss = opt.loss_weight*total_loss/eval_iters
     print (' ==> eval loss = ', loss)
-    print (' ==> eval map = ', map/eval_iters)
+    print (' ==> eval map (task1, task2, all) = ', map_task1/eval_iters, map_task2/eval_iters, map_all/eval_iters)
     
-    eval:print_precision_recall()
+    print('-------------- Task 1 -------------- ')
+    eval_task1:print_precision_recall()
+    print('-------------- Task 2 -------------- ')
+    eval_task2:print_precision_recall()
+    print('-------------- All -------------- ')
+    eval_all:print_precision_recall()
+    
     model:training() -- back to the training mode
     return loss
 end
@@ -208,7 +231,7 @@ local val_loss_history = {}
 
 -- Save model
 local function save_model()
-    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_iter' .. iter)
+    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_iter' .. iter  .. '.t7')
     local cp = {}
     cp.opt = opt
     cp.iter = iter
@@ -241,7 +264,7 @@ local function save_model()
     end
 
     print('Saving checkpoint to', cp_path)
-    torch.save(cp_path .. '.t7', cp)
+    torch.save(cp_path, cp)
 end
 
 -- First evaluation
@@ -268,7 +291,7 @@ while true do
     end
     
     if iter % opt.print_log_interval == 0 then 
-        loss_history[iter] = loss
+        loss_history[iter] = opt.loss_weight*loss
         print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
                 os.date(), iter, opt.loss_weight*loss, optim_config.learningRate, timer:time().real))
     end
