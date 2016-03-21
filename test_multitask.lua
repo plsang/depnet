@@ -34,7 +34,7 @@ cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger val
 cmd:option('-phase', 'test', 'phase (train/test)')
 cmd:option('-log_mode', 'console', 'console/file.  filename is the testing model file + .log')
 cmd:option('-log_dir', 'log', 'log dir')
-cmd:option('-version', 'v1.4', 'release version')    
+cmd:option('-version', 'v1.5', 'release version')    
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-print_log_interval', 1000, 'Number of test image.')
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')

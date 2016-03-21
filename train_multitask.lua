@@ -248,6 +248,7 @@ local function feval(x)
         error('Unknown multitask type', opt.multitask_type)
     end
     
+    val_loss_history[iter] = opt.loss_weight*loss
     model:backward(images, df_do)
     return loss
 end
@@ -304,7 +305,8 @@ while true do
     
     -- Call forward/backward with full params input
     local loss = feval(params)
-   
+    loss_history[iter] = opt.loss_weight*loss
+
     -- Now update params acordingly
     if opt.optim == 'sgd' then
         optim_utils.sgd(params, grad_params, optim_config)
@@ -315,7 +317,6 @@ while true do
     end
     
     if iter % opt.print_log_interval == 0 then 
-        loss_history[iter] = opt.loss_weight*loss
         print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
                 os.date(), iter, opt.loss_weight*loss, optim_config.learningRate, timer:time().real))
     end
