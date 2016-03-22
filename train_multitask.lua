@@ -65,7 +65,8 @@ cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
 cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
 cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
 cmd:option('-momentum', 0.99, 'momentum for sgd')
-cmd:option('-weight_decay', 0.0005, 'momentum for sgd')
+cmd:option('-weight_decay', 0, 'L2 regularization. 0 to disable [default]. Typical value: 0.0005')
+cmd:option('-reg_type', 2, '1: L1 regularization, 2: L2 regularization.')
 -- these options are for Adam
 cmd:option('-adam_beta1', 0.9, 'momentum for adam')
 cmd:option('-adam_beta2', 0.999, 'momentum for adam')
@@ -98,8 +99,10 @@ if opt.num_target == -1 then opt.num_target = train_loader_task1:getNumTargets()
 if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
 if opt.concept_type == '' then opt.concept_type = string.split(paths.basename(opt.train_label_file_h5, '.h5'), '_')[3] end
 if opt.model_id == '' then 
-    opt.model_id = string.format('%s_%s_mt%d_%s_b%d_bias%f_lr%f', 
-            opt.concept_type, opt.model_type, opt.multitask_type, opt.optim, opt.batch_size, opt.bias_init, opt.learning_rate)
+    opt.model_id = string.format('%s_%s_mt%d_%s_b%d_bias%f_lr%f_wd%f_l%d', 
+            opt.concept_type, opt.model_type, opt.multitask_type, 
+            opt.optim, opt.batch_size, opt.bias_init, 
+            opt.learning_rate, opt.weight_decay, opt.reg_type)
 end
 opt.iter_per_epoch = math.ceil(train_loader_task1:getNumImages()/opt.batch_size)
 if opt.save_cp_interval <= 0 then 
@@ -128,13 +131,14 @@ print('total number of parameters: ', params:nElement(), grad_params:nElement())
 -- note: don't use 'config' as a variable name
 local optim_config = {
     learningRate = opt.learning_rate,
+    weightDecay = opt.weight_decay,
+    reg_type = opt.reg_type,
     w_lr_mult = opt.w_lr_mult,
     b_lr_mult = opt.b_lr_mult,
     ft_lr_mult = opt.ft_lr_mult  -- if w and b have the same learning rate
 }
 
 if opt.optim == 'sgd' then
-    optim_config.weightDecay = opt.weight_decay
     optim_config.momentum = opt.momentum
     optim_config.learningRateDecay = opt.learning_rate_decay
 elseif opt.optim == 'adam' then
@@ -142,7 +146,7 @@ elseif opt.optim == 'adam' then
     optim_config.adam_beta2 = opt.adam_beta2
     optim_config.adam_epsilon = opt.adam_epsilon
 else
-    error('Unknow optimization method', opt.optim)
+    error('Unknown optimization method', opt.optim)
 end
 
 -- update param indices from model 
@@ -152,6 +156,19 @@ print('Optimization configurations', optim_config)
 
 local n1 = train_loader_task1:getNumTargets()
 local n2 = train_loader_task2:getNumTargets()
+
+local function cal_reg_loss()
+    -- add regularziation loss
+    local reg_loss = 0
+    if optim_config.weightDecay > 0 then
+        if optim_config.reg_type == 1 then
+            reg_loss = optim_config.weightDecay * torch.norm(params, 1)
+        elseif optim_config.reg_type == 2 then
+            reg_loss = optim_config.weightDecay * torch.norm(params, 2)
+        end
+    end
+    return reg_loss
+end
 
 local function eval_loss()
     model:evaluate()
@@ -194,6 +211,8 @@ local function eval_loss()
     end    
     
     local loss = opt.loss_weight*total_loss/eval_iters
+    loss = loss + cal_reg_loss()
+    
     print (' ==> eval loss = ', loss)
     print (' ==> eval map (task1, task2, all) = ', map_task1/eval_iters, map_task2/eval_iters, map_all/eval_iters)
     
@@ -250,6 +269,8 @@ local function feval(x)
     
     val_loss_history[iter] = opt.loss_weight*loss
     model:backward(images, df_do)
+    
+    loss = loss + cal_reg_loss()
     return loss
 end
 

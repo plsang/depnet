@@ -76,6 +76,7 @@ function optim_utils.adam(x, dfdx, config, state)
     local epsilon = config.adam_epsilon or 1e-8
     local state = state or config
     local lr = config.learningRate or 1e-3
+    local wd = config.weightDecay or 0
     
     if not state.m then
         --initialization
@@ -86,6 +87,17 @@ function optim_utils.adam(x, dfdx, config, state)
         state.v = x.new(#dfdx):zero()
         -- tmp tensor to hold the sqrt(v) + epsilon
         state.tmp = x.new(#dfdx):zero()
+    end
+    
+    if wd ~= 0 then
+        -- this will apply weight decay to bias as well, which is wd*b
+        if config.reg_type == 1 then
+            dfdx:add(torch.sign(x):mul(wd))
+        elseif config.reg_type == 2 then
+            dfdx:add(wd, x)
+        else
+            error('Unknown regularization type: ' .. config.reg_type)
+        end
     end
     
     state.m:mul(beta1):add(1-beta1, dfdx)
