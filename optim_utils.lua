@@ -90,11 +90,11 @@ function optim_utils.adam(x, dfdx, config, state)
     end
     
     if wd ~= 0 then
-        -- this will apply weight decay to bias as well, which is wd*b
+        -- regularization only at the finetuned layer
         if config.reg_type == 1 then
-            dfdx:add(torch.sign(x):mul(wd))
+            dfdx[{{config.ft_ind_start, config.ft_ind_end}}]:add(torch.sign(x[{{config.ft_ind_start, config.ft_ind_end}}]):mul(wd))
         elseif config.reg_type == 2 then
-            dfdx:add(wd, x)
+            dfdx[{{config.ft_ind_start, config.ft_ind_end}}]:add(wd, x[{{config.ft_ind_start, config.ft_ind_end}}])
         else
             error('Unknown regularization type: ' .. config.reg_type)
         end

@@ -162,9 +162,11 @@ local function cal_reg_loss()
     local reg_loss = 0
     if optim_config.weightDecay > 0 then
         if optim_config.reg_type == 1 then
-            reg_loss = optim_config.weightDecay * torch.norm(params, 1)
+            reg_loss = optim_config.weightDecay * 
+            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ft_ind_end}}], 1)
         elseif optim_config.reg_type == 2 then
-            reg_loss = optim_config.weightDecay * torch.norm(params, 2)
+            reg_loss = optim_config.weightDecay * 
+            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ft_ind_end}}], 2)
         end
     end
     return reg_loss
