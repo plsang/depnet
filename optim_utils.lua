@@ -121,5 +121,72 @@ function optim_utils.adam(x, dfdx, config, state)
     
 end
 
+-- adam_l21 version
+-- only update pre-finetuning layers
+function optim_utils.adam_l21(x, dfdx, config, state)
+    local beta1 = config.adam_beta1 or 0.9
+    local beta2 = config.adam_beta2 or 0.999
+    local epsilon = config.adam_epsilon or 1e-8
+    local state = state or config
+    local lr = config.learningRate or 1e-3
+    local wd = config.weightDecay or 0
+    
+    local dfdx_tmp = dfdx[{{1, config.ft_ind_start-1}}]
+    if not state.m then
+        --initialization
+        state.t = 0
+        -- momentum1 m = beta1*m + (1-beta1)*dx
+        state.m = x.new(#dfdx_tmp):zero()
+        -- mementum2 v = beta2*v + (1-beta2)*(dx**2)
+        state.v = x.new(#dfdx_tmp):zero()
+        -- tmp tensor to hold the sqrt(v) + epsilon
+        state.tmp = x.new(#dfdx_tmp):zero()
+    end
+    
+    state.m:mul(beta1):add(1-beta1, dfdx_tmp)
+    state.v:mul(beta2):addcmul(1-beta2, dfdx_tmp, dfdx_tmp)
+    state.tmp:copy(state.v):sqrt():add(epsilon)
+    
+    state.t = state.t + 1
+    local biasCorrection1 = 1 - beta1^state.t
+    local biasCorrection2 = 1 - beta2^state.t
+    local clr = lr * math.sqrt(biasCorrection2)/biasCorrection1
+    
+    x[{{1, config.ft_ind_start-1}}]:addcdiv(-clr, state.m, state.tmp)
+end
+
+-- input gradients of the fine-tuning layer
+-- output new weights of the fine-tuning layer
+function optim_utils.reg_l21(x, dfdx, config, state)
+    local beta1 = config.adam_beta1 or 0.9
+    local beta2 = config.adam_beta2 or 0.999
+    local epsilon = config.adam_epsilon or 1e-8
+    local state = state or config
+    local gamma = config.gamma_l21 or 1
+    local wd = config.weightDecay or 0
+    local fc7dim = config.fc7dim or 4096
+    
+    if not state.g then
+        --initialization
+        state.t = 0
+        state.g = x.new(config.ft_ind_end - config.ft_ind_start + 1):zero()
+    end
+    
+    state.t = state.t + 1
+    
+    -- update average gradients
+    state.g = state.g:mul(state.t - 1):div(state.t) + dfdx[{{config.ft_ind_start, config.ft_ind_end}}]:div(state.t)
+    
+    -- updating new x using closed-form solution
+    
+    for i=config.ft_ind_start,config.ft_ind_end,fc7dim+1 do
+        local gi = i - config.ft_ind_start + 1
+        local t1 = math.max(0, 1 - wd/torch.norm(state.g[{{gi,gi+fc7dim}}], 2))
+        local t2 = -math.sqrt(state.t)*t1/gamma
+        x[{{i,i+fc7dim}}]:copy(state.g[{{gi,gi+fc7dim}}]:mul(t2))
+    end
+    
+end
+
 
 return optim_utils

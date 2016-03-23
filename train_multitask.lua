@@ -54,7 +54,7 @@ cmd:option('-b_lr_mult', 20, 'learning multipier for bias on the finetuning laye
 cmd:option('-ft_lr_mult', 1, 'learning multipier for the finetuning layer, same for weight and bias')
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
-cmd:option('-optim', 'adam', 'optimization method: sgd, adam')
+cmd:option('-optim', 'adam', 'optimization method: sgd, adam, adaml21')
 cmd:option('-learning_rate', 1e-5, 'learning rate for sgd') -- msmil: 0.000015625
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
@@ -65,8 +65,10 @@ cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
 cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
 cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
 cmd:option('-momentum', 0.99, 'momentum for sgd')
-cmd:option('-weight_decay', 0, 'L2 regularization. 0 to disable [default]. Typical value: 0.0005')
-cmd:option('-reg_type', 2, '1: L1 regularization, 2: L2 regularization.')
+cmd:option('-weight_decay', 0, 'regularization multiplier. 0 to disable [default]. Typical value: 0.0005')
+cmd:option('-reg_type', 2, '1: L1 regularization, 2: L2 regularization, 3: L2,1 regularization')
+cmd:option('-gamma_l21', 1, 'gamma factor in l2,1 regularization')
+cmd:option('-fc7dim', 4096, 'fc7 dimension')
 -- these options are for Adam
 cmd:option('-adam_beta1', 0.9, 'momentum for adam')
 cmd:option('-adam_beta2', 0.999, 'momentum for adam')
@@ -133,6 +135,8 @@ local optim_config = {
     learningRate = opt.learning_rate,
     weightDecay = opt.weight_decay,
     reg_type = opt.reg_type,
+    gamma_l21 = opt.gamma_l21, -- l2,1 reg
+    fc7dim = opt.fc7dim,       -- l2,1 reg
     w_lr_mult = opt.w_lr_mult,
     b_lr_mult = opt.b_lr_mult,
     ft_lr_mult = opt.ft_lr_mult  -- if w and b have the same learning rate
@@ -141,7 +145,7 @@ local optim_config = {
 if opt.optim == 'sgd' then
     optim_config.momentum = opt.momentum
     optim_config.learningRateDecay = opt.learning_rate_decay
-elseif opt.optim == 'adam' then
+elseif opt.optim == 'adam' or opt.optim == 'adaml21' then
     optim_config.adam_beta1 = opt.adam_beta1
     optim_config.adam_beta2 = opt.adam_beta2
     optim_config.adam_epsilon = opt.adam_epsilon
@@ -157,6 +161,14 @@ print('Optimization configurations', optim_config)
 local n1 = train_loader_task1:getNumTargets()
 local n2 = train_loader_task2:getNumTargets()
 
+
+-- MAIN LOOP --- 
+local iter = 0
+local epoch = 0
+local loss_history = {}
+local val_loss_history = {}
+
+
 local function cal_reg_loss()
     -- add regularziation loss
     local reg_loss = 0
@@ -167,6 +179,12 @@ local function cal_reg_loss()
         elseif optim_config.reg_type == 2 then
             reg_loss = optim_config.weightDecay * 
             torch.norm(params[{{optim_config.ft_ind_start, optim_config.ft_ind_end}}], 2)
+        elseif optim_config.reg_type == 3 then
+            local tmp_loss = 0
+            for i=optim_config.ft_ind_start,optim_config.ft_ind_end,optim_config.fc7dim+1 do
+                tmp_loss = tmp_loss + torch.norm(params[{{i,i+optim_config.fc7dim}}], 2)
+            end
+            reg_loss = optim_config.weightDecay * tmp_loss
         end
     end
     return reg_loss
@@ -213,10 +231,11 @@ local function eval_loss()
     end    
     
     local loss = opt.loss_weight*total_loss/eval_iters
-    loss = loss + cal_reg_loss()
-    
-    print (' ==> eval loss = ', loss)
+    local reg_loss = opt.loss_weight*cal_reg_loss()
+    print (' ==> eval loss (loss, reg_loss, all) = ', loss, reg_loss, loss + reg_loss)
     print (' ==> eval map (task1, task2, all) = ', map_task1/eval_iters, map_task2/eval_iters, map_all/eval_iters)
+    
+    loss = loss + reg_loss
     
     print('-------------- Task 1 -------------- ')
     eval_task1:print_precision_recall()
@@ -225,15 +244,11 @@ local function eval_loss()
     print('-------------- All -------------- ')
     eval_all:print_precision_recall()
     
+    val_loss_history[iter] = opt.loss_weight*loss
+    
     model:training() -- back to the training mode
     return loss
 end
-
--- MAIN LOOP --- 
-local iter = 0
-local epoch = 0
-local loss_history = {}
-local val_loss_history = {}
 
 -- callback function
 local function feval(x)
@@ -269,11 +284,10 @@ local function feval(x)
         error('Unknown multitask type', opt.multitask_type)
     end
     
-    val_loss_history[iter] = opt.loss_weight*loss
     model:backward(images, df_do)
     
-    loss = loss + cal_reg_loss()
-    return loss
+    local reg_loss = cal_reg_loss()
+    return loss + reg_loss, loss, reg_loss
 end
 
 -- Save model
@@ -327,7 +341,7 @@ while true do
     timer:reset()
     
     -- Call forward/backward with full params input
-    local loss = feval(params)
+    local loss, floss, reg_loss = feval(params)
     loss_history[iter] = opt.loss_weight*loss
 
     -- Now update params acordingly
@@ -335,13 +349,18 @@ while true do
         optim_utils.sgd(params, grad_params, optim_config)
     elseif opt.optim == 'adam' then
         optim_utils.adam(params, grad_params, optim_config)   
+    elseif opt.optim == 'adaml21' then
+        optim_utils.adam_l21(params, grad_params, optim_config)       
+        optim_utils.reg_l21(params, grad_params, optim_config)       
     else
         error('Unknow optimization method', opt.optim)
     end
     
     if iter % opt.print_log_interval == 0 then 
-        print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
-                os.date(), iter, opt.loss_weight*loss, optim_config.learningRate, timer:time().real))
+        print(string.format('%s: iter %d, lr = %g, floss = %f, reg_loss = %f, loss = %f (%.3fs/iter)', 
+                os.date(), iter, optim_config.learningRate, 
+                opt.loss_weight*floss, opt.loss_weight*reg_loss, opt.loss_weight*loss, 
+                timer:time().real))
     end
    
     -- test loss
