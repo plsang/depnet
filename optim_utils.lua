@@ -132,21 +132,23 @@ function optim_utils.adam_l21(x, dfdx, config, state)
     local state = state or config
     local lr = config.learningRate or 1e-3
     local wd = config.weightDecay or 0
+    local ws = config.ft_ind_start       -- start index of finetuned weight
+    local we = config.ftb_ind_start - 1  -- end index of finetuned weight
+    local fc7dim = config.fc7dim or 4096
     
-    local dfdx_tmp = dfdx[{{1, config.ft_ind_start-1}}]
     if not state.m then
         --initialization
         state.t = 0
         -- momentum1 m = beta1*m + (1-beta1)*dx
-        state.m = x.new(#dfdx_tmp):zero()
+        state.m = x.new(#dfdx):zero()
         -- mementum2 v = beta2*v + (1-beta2)*(dx**2)
-        state.v = x.new(#dfdx_tmp):zero()
+        state.v = x.new(#dfdx):zero()
         -- tmp tensor to hold the sqrt(v) + epsilon
-        state.tmp = x.new(#dfdx_tmp):zero()
+        state.tmp = x.new(#dfdx):zero()
     end
     
-    state.m:mul(beta1):add(1-beta1, dfdx_tmp)
-    state.v:mul(beta2):addcmul(1-beta2, dfdx_tmp, dfdx_tmp)
+    state.m:mul(beta1):add(1-beta1, dfdx)
+    state.v:mul(beta2):addcmul(1-beta2, dfdx, dfdx)
     state.tmp:copy(state.v):sqrt():add(epsilon)
     
     state.t = state.t + 1
@@ -154,41 +156,28 @@ function optim_utils.adam_l21(x, dfdx, config, state)
     local biasCorrection2 = 1 - beta2^state.t
     local clr = lr * math.sqrt(biasCorrection2)/biasCorrection1
     
-    x[{{1, config.ft_ind_start-1}}]:addcdiv(-clr, state.m, state.tmp)
-end
-
--- input gradients of the fine-tuning layer
--- output new weights of the fine-tuning layer
-function optim_utils.reg_l21(x, dfdx, config, state)
-    local beta1 = config.adam_beta1 or 0.9
-    local beta2 = config.adam_beta2 or 0.999
-    local epsilon = config.adam_epsilon or 1e-8
-    local state = state or config
-    local gamma = config.gamma_l21 or 1
-    local wd = config.weightDecay or 0
-    local fc7dim = config.fc7dim or 4096
+    --x:addcdiv(-clr, state.m, state.tmp)
+    x[{{1, config.ft_ind_start-1}}]:addcdiv(-clr, 
+        state.m[{{1, config.ft_ind_start-1}}], 
+        state.tmp[{{1, config.ft_ind_start-1}}])
     
-    if not state.g then
-        --initialization
-        state.t = 0
-        state.g = x.new(config.ft_ind_end - config.ft_ind_start + 1):zero()
-    end
-    
-    state.t = state.t + 1
-    
-    -- update average gradients
-    state.g = state.g:mul(state.t - 1):div(state.t) + dfdx[{{config.ft_ind_start, config.ft_ind_end}}]:div(state.t)
-    
-    -- updating new x using closed-form solution
-    
-    for i=config.ft_ind_start,config.ft_ind_end,fc7dim+1 do
-        local gi = i - config.ft_ind_start + 1
-        local t1 = math.max(0, 1 - wd/torch.norm(state.g[{{gi,gi+fc7dim}}], 2))
-        local t2 = -math.sqrt(state.t)*t1/gamma
-        x[{{i,i+fc7dim}}]:copy(state.g[{{gi,gi+fc7dim}}]:mul(t2))
+    -- finetuning layer needs more update
+    if config.ft_lr_mult > 1 then
+        -- update of bias is same 
+        x[{{config.ftb_ind_start, config.ftb_ind_end}}]:addcdiv(
+            -config.ft_lr_mult*clr, 
+            state.m[{{config.ftb_ind_start, config.ftb_ind_end}}], 
+            state.tmp[{{config.ftb_ind_start, config.ftb_ind_end}}])
+        
+        -- update of weights is different
+        for i=config.ft_ind_start,config.ftb_ind_start-1,fc7dim do
+            local t1 = x[{{i,i+fc7dim-1}}] - torch.cdiv(state.m[{{i,i+fc7dim-1}}], 
+                state.tmp[{{i,i+fc7dim-1}}]):mul(config.ft_lr_mult*clr)
+            local t2 = math.max(0, 1 - config.ft_lr_mult*lr*wd/torch.norm(t1, 2))
+            x[{{i,i+fc7dim-1}}]:mul(t1, t2) -- x = t2*t1
+        end
     end
     
 end
-
 
 return optim_utils

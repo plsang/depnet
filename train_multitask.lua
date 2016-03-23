@@ -67,7 +67,6 @@ cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
 cmd:option('-momentum', 0.99, 'momentum for sgd')
 cmd:option('-weight_decay', 0, 'regularization multiplier. 0 to disable [default]. Typical value: 0.0005')
 cmd:option('-reg_type', 2, '1: L1 regularization, 2: L2 regularization, 3: L2,1 regularization')
-cmd:option('-gamma_l21', 1, 'gamma factor in l2,1 regularization')
 cmd:option('-fc7dim', 4096, 'fc7 dimension')
 -- these options are for Adam
 cmd:option('-adam_beta1', 0.9, 'momentum for adam')
@@ -135,7 +134,6 @@ local optim_config = {
     learningRate = opt.learning_rate,
     weightDecay = opt.weight_decay,
     reg_type = opt.reg_type,
-    gamma_l21 = opt.gamma_l21, -- l2,1 reg
     fc7dim = opt.fc7dim,       -- l2,1 reg
     w_lr_mult = opt.w_lr_mult,
     b_lr_mult = opt.b_lr_mult,
@@ -175,10 +173,10 @@ local function cal_reg_loss()
     if optim_config.weightDecay > 0 then
         if optim_config.reg_type == 1 then
             reg_loss = optim_config.weightDecay * 
-            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ft_ind_end}}], 1)
+            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ftb_ind_start-1}}], 1)
         elseif optim_config.reg_type == 2 then
             reg_loss = optim_config.weightDecay * 
-            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ft_ind_end}}], 2)
+            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ftb_ind_start-1}}], 2)
         elseif optim_config.reg_type == 3 then
             local tmp_loss = 0
             -- only use weight for reg_loss, no bias
@@ -352,7 +350,6 @@ while true do
         optim_utils.adam(params, grad_params, optim_config)   
     elseif opt.optim == 'adaml21' then
         optim_utils.adam_l21(params, grad_params, optim_config)       
-        optim_utils.reg_l21(params, grad_params, optim_config)       
     else
         error('Unknow optimization method', opt.optim)
     end
