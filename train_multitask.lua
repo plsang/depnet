@@ -181,8 +181,9 @@ local function cal_reg_loss()
             torch.norm(params[{{optim_config.ft_ind_start, optim_config.ft_ind_end}}], 2)
         elseif optim_config.reg_type == 3 then
             local tmp_loss = 0
-            for i=optim_config.ft_ind_start,optim_config.ft_ind_end,optim_config.fc7dim+1 do
-                tmp_loss = tmp_loss + torch.norm(params[{{i,i+optim_config.fc7dim}}], 2)
+            -- only use weight for reg_loss, no bias
+            for i=optim_config.ft_ind_start,optim_config.ftb_ind_start-1,optim_config.fc7dim do
+                tmp_loss = tmp_loss + torch.norm(params[{{i,i+optim_config.fc7dim-1}}], 2)
             end
             reg_loss = optim_config.weightDecay * tmp_loss
         end

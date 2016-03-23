@@ -77,6 +77,8 @@ function optim_utils.adam(x, dfdx, config, state)
     local state = state or config
     local lr = config.learningRate or 1e-3
     local wd = config.weightDecay or 0
+    local ws = config.ft_ind_start       -- start index of finetuned weight
+    local we = config.ftb_ind_start - 1  -- end index of finetuned weight
     
     if not state.m then
         --initialization
@@ -92,9 +94,9 @@ function optim_utils.adam(x, dfdx, config, state)
     if wd ~= 0 then
         -- regularization only at the finetuned layer
         if config.reg_type == 1 then
-            dfdx[{{config.ft_ind_start, config.ft_ind_end}}]:add(torch.sign(x[{{config.ft_ind_start, config.ft_ind_end}}]):mul(wd))
+            dfdx[{{ws,we}}]:add(torch.sign(x[{{ws,we}}]):mul(wd))
         elseif config.reg_type == 2 then
-            dfdx[{{config.ft_ind_start, config.ft_ind_end}}]:add(wd, x[{{config.ft_ind_start, config.ft_ind_end}}])
+            dfdx[{{ws,we}}]:add(wd, x[{{ws,we}}])
         else
             error('Unknown regularization type: ' .. config.reg_type)
         end
