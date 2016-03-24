@@ -79,6 +79,7 @@ function optim_utils.adam(x, dfdx, config, state)
     local wd = config.weightDecay or 0
     local ws = config.ft_ind_start       -- start index of finetuned weight
     local we = config.ftb_ind_start - 1  -- end index of finetuned weight
+    local fc7dim = config.fc7dim or 4096
     
     if not state.m then
         --initialization
@@ -97,6 +98,17 @@ function optim_utils.adam(x, dfdx, config, state)
             dfdx[{{ws,we}}]:add(torch.sign(x[{{ws,we}}]):mul(wd))
         elseif config.reg_type == 2 then
             dfdx[{{ws,we}}]:add(wd, x[{{ws,we}}])
+        elseif config.reg_type == 3 then
+            for i=ws,we,fc7dim do
+                local xi = x[{{i,i+fc7dim-1}}]
+                local ni = torch.norm(xi,2)
+                if ni > 0 then
+                    local d_xi = xi:div(ni)
+                    dfdx[{{i,i+fc7dim-1}}]:add(wd, d_xi)
+                else
+                    print('warning: zero norm detected')
+                end
+            end
         else
             error('Unknown regularization type: ' .. config.reg_type)
         end
@@ -156,6 +168,7 @@ function optim_utils.adam_l21(x, dfdx, config, state)
     local biasCorrection2 = 1 - beta2^state.t
     local clr = lr * math.sqrt(biasCorrection2)/biasCorrection1
     
+    
     --x:addcdiv(-clr, state.m, state.tmp)
     x[{{1, config.ft_ind_start-1}}]:addcdiv(-clr, 
         state.m[{{1, config.ft_ind_start-1}}], 
@@ -173,7 +186,7 @@ function optim_utils.adam_l21(x, dfdx, config, state)
         for i=config.ft_ind_start,config.ftb_ind_start-1,fc7dim do
             local t1 = x[{{i,i+fc7dim-1}}] - torch.cdiv(state.m[{{i,i+fc7dim-1}}], 
                 state.tmp[{{i,i+fc7dim-1}}]):mul(config.ft_lr_mult*clr)
-            local t2 = math.max(0, 1 - config.ft_lr_mult*lr*wd/torch.norm(t1, 2))
+            local t2 = math.max(0, 1 - wd/torch.norm(t1, 2))
             x[{{i,i+fc7dim-1}}]:mul(t1, t2) -- x = t2*t1
         end
     end
