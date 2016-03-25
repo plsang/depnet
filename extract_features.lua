@@ -5,10 +5,9 @@ Class to train
 require 'nn'
 require 'cudnn'
 require "logging.console"
-
+require 'hdf5'
 require 'CocoData'
-require 'MultilabelCrossEntropyCriterion'
-require 'eval_utils'
+
 local model_utils = require 'model_utils'
     
 cmd = torch.CmdLine()
@@ -38,6 +37,7 @@ cmd:option('-version', 'v1.5', 'release version')
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-print_log_interval', 1000, 'Number of test image.')
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')
+cmd:option('-output_file', '', 'path to output file')
 
 
 cmd:text()
@@ -56,80 +56,61 @@ end
 
 if opt.debug == 1 then dbg = require 'debugger' end
 
-local loader_task1 = CocoData{image_file_h5 = opt.val_image_file_h5, 
+local loader = CocoData{image_file_h5 = opt.val_image_file_h5, 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.val_label_file_h5_task1),
     batch_size = opt.batch_size}
-local loader_task2 = CocoData{image_file_h5 = opt.val_image_file_h5, 
-    label_file_h5 = paths.concat(opt.coco_data_root, opt.val_label_file_h5_task2),
-    batch_size = opt.batch_size}
 
-if opt.num_test_image == -1 then opt.num_test_image = loader_task1:getNumImages() end
-if opt.num_target == -1 then opt.num_target = loader_task1:getNumTargets() + loader_task2:getNumTargets() end
+if opt.num_test_image == -1 then opt.num_test_image = loader:getNumImages() end
+if opt.num_target == -1 then opt.num_target = loader:getNumTargets() end
 print(opt)
 
 logger:info('Number of testing images: ' .. opt.num_test_image)
 logger:info('Number of labels: ' .. opt.num_target)
+logger:info('Model type: ' .. opt.model_type)
+logger:info('Loading model: ' .. opt.test_cp)
 
-logger:info('Logging model. Type: ' .. opt.model_type)
 local model = model_utils.load_model(opt):cuda()
-local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
 model:evaluate()  
 
+local myFile = hdf5.open(opt.output_file, 'w')
+-- local options = hdf5.DataSetOptions()
+-- options:setChunked(32, 32)
+-- options:setDeflate()
+
+--writing data of type string is not supported
+-- myFile:write('/columns', model.vocab, options)
+
+local index = torch.LongTensor(opt.num_test_image):zero()
+local data = torch.FloatTensor(opt.num_test_image, opt.num_target):zero()
+
+local timer = torch.Timer()
+
 local num_iters = torch.ceil(opt.num_test_image/opt.batch_size)
-
-local eval_task1 = eval_utils()
-local eval_task2 = eval_utils()
-local eval_all = eval_utils()
-
-local map_task1 = 0
-local map_task2 = 0
-local map_all = 0
-
-local n1 = loader_task1:getNumTargets()
-local n2 = loader_task2:getNumTargets()
-
-function print_eval_log()
-    logger:info('-------------- Task 1 -------------- ')
-    eval_task1:print_precision_recall(logger)
-    logger:info('-------------- Task 2 -------------- ')
-    eval_task2:print_precision_recall(logger)
-    logger:info('-------------- All -------------- ')
-    eval_all:print_precision_recall(logger)
-end
-
 for iter=1, num_iters do
+    local batch = loader:getBatch() -- get image and label batches
+    local outputs = model:forward(batch.images:cuda())
     
-    local data1 = loader_task1:getBatch() -- get image and label batches
-    local data2 = loader_task2:getBatch(true) -- get label only
-    local images = data1.images:cuda()
-    local labels = torch.cat(data1.labels, data2.labels, 2)
+    local start_idx = (iter-1)*opt.batch_size + 1
+    local end_idx = iter*opt.batch_size
+    if end_idx > opt.num_test_image then
+        end_idx = opt.num_test_image
+    end
     
-    local outputs = model:forward(images)
-    local iter_loss = criterion:forward(outputs, labels:cuda())
-    
-    eval_task1:cal_precision_recall(outputs[{{},{1,n1}}], labels[{{},{1,n1}}])
-    eval_task2:cal_precision_recall(outputs[{{},{n1+1,n1+n2}}], labels[{{},{n1+1,n1+n2}}])
-    eval_all:cal_precision_recall(outputs, labels)
-
-    local batch_map_task1 = eval_task1:cal_mean_average_precision(outputs[{{},{1,n1}}]:float(), labels[{{},{1,n1}}])
-    local batch_map_task2 = eval_task2:cal_mean_average_precision(outputs[{{},{n1+1,n1+n2}}]:float(), labels[{{},{n1+1,n1+n2}}])
-    local batch_map_all = eval_all:cal_mean_average_precision(outputs:float(), labels)
-
-    map_task1 = map_task1 + batch_map_task1
-    map_task2 = map_task2 + batch_map_task2
-    map_all = map_all + batch_map_all
+    index[{{start_idx, end_idx}}] = batch.image_ids:long()
+    data[{{start_idx, end_idx},{}}] = outputs:float()
     
     if iter % opt.print_log_interval == 0 then 
-        logger:info(string.format('iter %d: iter_loss = %.6f, map_task1 = %.6f, map_task2 = %.6f, map_all = %.6f', 
-                iter, opt.loss_weight*iter_loss, map_task1/iter, map_task2/iter, map_all/iter))
-        print_eval_log()
+        logger:info(string.format('iter %d passed', iter))
         collectgarbage() 
     end
 end    
 
-logger:info('Final performanace:')
-logger:info(string.format(' ==> map (task1, task2, all) = (%.6f, %.6f, %.6f)', 
-        map_task1/num_iters, map_task2/num_iters, map_all/num_iters))
-print_eval_log()
+logger:info('Writing indices...')
+myFile:write('/index', index, options)
+logger:info('Writing data...')
+myFile:write('/data', data, options)
+myFile:close()
+logger:info('Done. Elappsed time: ' .. timer:time().real .. '(s)' )
+
 
 
