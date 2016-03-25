@@ -36,7 +36,8 @@ cmd:option('-log_dir', 'log', 'log dir')
 cmd:option('-version', 'v1.5', 'release version')    
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-print_log_interval', 1000, 'Number of test image.')
-cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')
+cmd:option('-model_type', 'milmaxnor', 'vgg, vggbn, milmax, milnor, milmaxnor')
+cmd:option('-layer', 'fc8', 'fc8, fc7')
 cmd:option('-output_file', '', 'path to output file')
 
 
@@ -70,7 +71,17 @@ logger:info('Model type: ' .. opt.model_type)
 logger:info('Loading model: ' .. opt.test_cp)
 
 local model = model_utils.load_model(opt):cuda()
-model:evaluate()  
+
+if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
+    model:remove()  -- remove MIL
+    model['modules'][2]:remove()  -- remove sigmoid
+    model['modules'][2]:remove()  -- remove fc8
+    print(model['modules'][2])
+    model:add(nn.SpatialMIL('milmaxnor'):cuda()) 
+    opt.num_target = 4096
+end
+
+model:evaluate() 
 
 local myFile = hdf5.open(opt.output_file, 'w')
 -- local options = hdf5.DataSetOptions()
@@ -85,6 +96,7 @@ local data = torch.FloatTensor(opt.num_test_image, opt.num_target):zero()
 
 local timer = torch.Timer()
 
+logger:info('Start extracting...')
 local num_iters = torch.ceil(opt.num_test_image/opt.batch_size)
 for iter=1, num_iters do
     local batch = loader:getBatch() -- get image and label batches
