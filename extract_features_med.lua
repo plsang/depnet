@@ -123,7 +123,7 @@ for ii=1,opt.num_test_video do
         local num_test_image = loader:getNumImages()
         
         video_id = videos[ii]['video_id']
-        logger:info('Extracting feature for video ' .. video_id)
+        logger:info(string.format('[%d/%d] Extracting feature for video %s...', ii, opt.num_test_video, video_id))
         local num_iters = torch.ceil(num_test_image/opt.batch_size)
 
         local feats = torch.FloatTensor(num_test_image, opt.num_target):zero()
