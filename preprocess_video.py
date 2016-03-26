@@ -14,6 +14,7 @@ from random import shuffle, seed
 import logging
 from datetime import datetime
 from preprocess_image import upsample_image
+from multiprocessing import Pool
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,9 @@ def preprocess_video(output_file, video_kf_dir, img_size=224, step=2):
         
     f.close()
 
+def parallel_helper(args):
+    preprocess_video(*args)
+    
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s:%(levelname)s: %(message)s')
     parser = argparse.ArgumentParser()
@@ -83,6 +87,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_dir', default='/net/per610a/export/das11f/plsang/trecvidmed/preprocessed', help='Output directory')
     parser.add_argument('--img_size', default=565, type=int, help='224 for VGG, 565 for MSMIL')
     parser.add_argument('--step', default=2, type=int, help='Sampling step for extracting frames')
+    parser.add_argument('--pool', default=8, type=int, help='Number of pool processes')
     
     args = parser.parse_args()
     start = datetime.now()
@@ -91,19 +96,31 @@ if __name__ == "__main__":
     with open(args.input_file) as f:
         videos = [json.loads(line) for line in f]
     
+    logger.info('Starting pool')
+    p = Pool(args.pool)
+    job_args = []
+    
+    logger.info('Preparing data for pooling')
     for ii in range(0, len(videos)):
         video = videos[ii]
         video_id = video['video_id']
         video_loc = video['location']
         video_kf_dir = os.path.join(args.video_dir, video_loc)
         
-        logger.info('[%d/%d] Processing video %s', ii, len(videos), video_loc)    
+        # logger.info('[%d/%d] Processing video %s', ii, len(videos), video_loc)    
         output_file = os.path.join(args.output_dir, video_loc + '.h5')
         if os.path.exists(output_file):
             logger.info('File existed: %s', output_file)
             continue    
             
-        preprocess_video(output_file, video_kf_dir, img_size=args.img_size, step=args.step)
-        
+        #preprocess_video(output_file, video_kf_dir, img_size=args.img_size, step=args.step)
+        job_args.append((output_file, video_kf_dir))
+    
+    logger.info('Mapping to pooling helper function')
+    p.map(parallel_helper, job_args)
+    logger.info('Closing')
+    p.close()
+    p.join()
+    
     logger.info('Wrote to %s', params['output_h5'])    
     logger.info('Time: %s', datetime.now() - start)
