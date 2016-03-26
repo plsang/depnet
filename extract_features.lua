@@ -16,10 +16,9 @@ cmd:text('Options')
 
 -- Data input settings
 cmd:option('-coco_data_root', '/net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO', 'path to coco data root')
-cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed image data')
+cmd:option('-image_file_h5', 'data/coco_val.h5', 'path to the prepressed image data')
 
-cmd:option('-val_label_file_h5_task1', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
-cmd:option('-val_label_file_h5_task2', 'mscoco2014_val_mydepsv4.h5', 'file name of the prepressed val label data')
+cmd:option('-label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
 
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_image', -1, 'Number of test image, -1 for testing all (40504)')
@@ -57,8 +56,8 @@ end
 
 if opt.debug == 1 then dbg = require 'debugger' end
 
-local loader = CocoData{image_file_h5 = opt.val_image_file_h5, 
-    label_file_h5 = paths.concat(opt.coco_data_root, opt.val_label_file_h5_task1),
+local loader = CocoData{image_file_h5 = opt.image_file_h5, 
+    label_file_h5 = paths.concat(opt.coco_data_root, opt.label_file_h5),
     batch_size = opt.batch_size}
 
 if opt.num_test_image == -1 then opt.num_test_image = loader:getNumImages() end
@@ -108,8 +107,8 @@ for iter=1, num_iters do
         end_idx = opt.num_test_image
     end
     
-    index[{{start_idx, end_idx}}] = batch.image_ids:long()
-    data[{{start_idx, end_idx},{}}] = outputs:float()
+    index[{{start_idx, end_idx}}] = batch.image_ids[{{1,end_idx-start_idx+1}}]:long() -- copy cpu ==> gpu 
+    data[{{start_idx, end_idx},{}}] = outputs[{{1,end_idx-start_idx+1},{}}]:float()   -- copy cpu ==> gpu 
     
     if iter % opt.print_log_interval == 0 then 
         logger:info(string.format('iter %d passed', iter))
