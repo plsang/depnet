@@ -71,7 +71,7 @@ def preprocess_video(output_file, video_kf_dir, img_size=224, step=2):
         im_rsz = load_image(img_path, img_size)
         
         data[ii] = im_rsz
-        index[ii] = ii
+        index[ii] = ss
         
     f.close()
 
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     with open(args.input_file) as f:
         videos = [json.loads(line) for line in f]
     
-    logger.info('Starting pool')
+    logger.info('Starting pool %d', args.pool)
     p = Pool(args.pool)
     job_args = []
     
@@ -114,7 +114,7 @@ if __name__ == "__main__":
             continue    
             
         #preprocess_video(output_file, video_kf_dir, img_size=args.img_size, step=args.step)
-        job_args.append((output_file, video_kf_dir))
+        job_args.append((output_file, video_kf_dir, args.img_size, args.step))
     
     logger.info('Mapping to pooling helper function')
     p.map(parallel_helper, job_args)
