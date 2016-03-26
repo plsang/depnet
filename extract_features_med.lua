@@ -143,7 +143,8 @@ for ii=1,opt.num_test_video do
         
         data[ii] = torch.mean(feats, 1)
         index[ii] = tonumber(string.sub(video_id, 4, #video_id))
-        
+       
+        loader:close() 
         feats = nil
         collectgarbage()
     end

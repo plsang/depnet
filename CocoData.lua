@@ -11,16 +11,15 @@ function CocoData:__init(opt)
     -- Iterator
     self.iterator = 1
     
-    if not opt.images_key then 
-        self.images_key = '/images' 
-    else 
+    self.images_key = '/images' 
+    if opt.images_key then 
         self.images_key = opt.images_key
     end
     
     print('Loading image data: ', opt.image_file_h5)
     self.image_data = hdf5.open(opt.image_file_h5, 'r')
     
-    local image_data_size = self.image_data:read(opt.images_key):dataspaceSize()
+    local image_data_size = self.image_data:read(self.images_key):dataspaceSize()
     assert(#image_data_size == 4, '/images is a 4D tensor')
     assert(image_data_size[3] == image_data_size[4], 'image width and height are not equal')
     
@@ -49,6 +48,11 @@ function CocoData:__init(opt)
     --
     self.batch_size = opt.batch_size
     
+end
+
+function CocoData:close()
+    if self.image_data then self.image_data:close() end
+    if self.label_data then self.label_data:close() end
 end
 
 function CocoData:getNumImages()
@@ -111,5 +115,9 @@ end
 
 function CocoData:getCurrentIndex()
     return self.iterator
+end
+
+function CocoData:setCurrentIndex(index)
+    self.iterator = index
 end
 
