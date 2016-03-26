@@ -84,10 +84,17 @@ logger:info('Loading model: ' .. opt.test_cp)
 
 local model = model_utils.load_model(opt):cuda()
 
-if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
+if opt.model_type == 'milmaxnor' and (opt.layer == 'fc7' or opt.layer == 'fc6') then
     model:remove()  -- remove MIL
     model['modules'][2]:remove()  -- remove sigmoid
     model['modules'][2]:remove()  -- remove fc8
+    
+    if opt.layer == 'fc6' then
+        model['modules'][2]:remove()  -- remove dropout
+        model['modules'][2]:remove()  -- remove relu
+        model['modules'][2]:remove()  -- remove spatial convolution
+    end
+    
     print(model['modules'][2])
     model:add(nn.SpatialMIL('milmaxnor'):cuda()) 
     opt.num_target = 4096
