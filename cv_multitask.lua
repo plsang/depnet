@@ -109,8 +109,6 @@ if opt.save_cp_interval <= 0 then
     opt.save_cp_interval = opt.iter_per_epoch
 end
 
-
-
 print(opt)
 ------------------------------------------
 
@@ -118,20 +116,6 @@ local eval_task1 = eval_utils()
 local eval_task2 = eval_utils()
 local eval_all = eval_utils()
 
-local model = model_utils.load_model(opt):cuda()
-
--- local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda() -- Lua version
-local criterion = nn.MultiLabelCrossEntropyCriterion(opt.loss_weight):cuda() -- C/Cuda version
-
-print(model.modules)
-
--- Initialization
-model_utils.init_finetuning_params(model, opt)
-
-local params, grad_params = model:getParameters()
-print('total number of parameters: ', params:nElement(), grad_params:nElement())
-
--- note: don't use 'config' as a variable name
 local optim_config = {
     learningRate = opt.learning_rate,
     weightDecay = opt.weight_decay,
@@ -152,15 +136,27 @@ elseif opt.optim == 'adam' or opt.optim == 'adaml21' then
 else
     error('Unknown optimization method', opt.optim)
 end
-
--- update param indices from model 
-model_utils.update_param_indices(model, opt, optim_config)
-
 print('Optimization configurations', optim_config) 
+
+local model, criterion, params, grad_params
+
+local function reset_model()    
+    if not model then
+        model = nil
+        collectgarbage()
+    end
+    
+    model = model_utils.load_model(opt):cuda()
+    criterion = nn.MultiLabelCrossEntropyCriterion(opt.loss_weight):cuda()
+    model_utils.init_finetuning_params(model, opt)
+    params, grad_params = model:getParameters()
+    print('total number of parameters: ', params:nElement(), grad_params:nElement())
+    model_utils.update_param_indices(model, opt, optim_config)
+    print(model.modules)
+end
 
 local n1 = train_loader_task1:getNumTargets()
 local n2 = train_loader_task2:getNumTargets()
-
 
 -- MAIN LOOP --- 
 local iter = 0
@@ -284,11 +280,11 @@ local function feval(x)
 end
 
 
-
 function train(lamda)
     
     optim_config.weightDecay = lamda
     
+    reset_model()
     model:training()
     
     train_loader_task1:reset() 
@@ -338,7 +334,7 @@ function train(lamda)
     return eval_map
 end
 
-local lamdas = {1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7}
+local lamdas = {1e-4, 1e-5, 1e-6, 1e-7, 1e-8}
 local best_map = 0
 local best_lamda = 0
 for ii = 1,#lamdas do
