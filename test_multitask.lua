@@ -4,7 +4,8 @@ Class to train
 
 require 'nn'
 require 'cudnn'
-require "logging.console"
+require 'logging.console'
+require 'hdf5'
 
 require 'CocoData'
 require 'MultilabelCrossEntropyCriterion'
@@ -28,7 +29,7 @@ cmd:option('-batch_size', 1, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
-cmd:option('-test_cp', '', 'name of the checkpoint to test')
+cmd:option('-test_cp', '', 'name of the checkpoint or the predicted h5 file to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-phase', 'test', 'phase (train/test)')
@@ -38,6 +39,7 @@ cmd:option('-version', 'v1.5', 'release version')
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-print_log_interval', 1000, 'Number of test image.')
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')
+cmd:option('-test_mode', 'model', 'model/file: test from a model or from a predicted file')
 
 
 cmd:text()
@@ -70,10 +72,18 @@ print(opt)
 logger:info('Number of testing images: ' .. opt.num_test_image)
 logger:info('Number of labels: ' .. opt.num_target)
 
-logger:info('Logging model. Type: ' .. opt.model_type)
-local model = model_utils.load_model(opt):cuda()
-local criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
-model:evaluate()  
+local model, criterion, output_loader
+if opt.test_mode == 'model' then
+    logger:info('Logging model. Type: ' .. opt.model_type)
+    model = model_utils.load_model(opt):cuda()
+    criterion = nn.MultilabelCrossEntropyCriterion(opt.loss_weight):cuda()
+    model:evaluate()  
+else
+    output_loader = hdf5.open(opt.test_cp, 'r')
+    local data_size = output_loader:read('/data'):dataspaceSize()
+    assert(data_size[1] == opt.num_test_image, 'number of test images are not equal')
+    assert(data_size[2] == opt.num_target, 'number of targets are not equal')
+end
 
 local num_iters = torch.ceil(opt.num_test_image/opt.batch_size)
 
@@ -97,6 +107,9 @@ function print_eval_log()
     eval_all:print_precision_recall(logger)
 end
 
+local outputs
+local idx = 1
+
 for iter=1, num_iters do
     
     local data1 = loader_task1:getBatch() -- get image and label batches
@@ -104,8 +117,15 @@ for iter=1, num_iters do
     local images = data1.images:cuda()
     local labels = torch.cat(data1.labels, data2.labels, 2)
     
-    local outputs = model:forward(images)
-    local iter_loss = criterion:forward(outputs, labels:cuda())
+    if opt.test_mode == 'model' then
+        outputs = model:forward(images)
+        -- local iter_loss = criterion:forward(outputs, labels:cuda())
+    else
+        local index = output_loader:read('/index'):partial({idx, idx+opt.batch_size-1})
+        assert(torch.all(torch.eq(index, data1.image_ids)), 'error: image ids are not matched!!!')
+        outputs = output_loader:read('/data'):partial({idx, idx+opt.batch_size-1})
+        idx = idx+opt.batch_size
+    end
     
     eval_task1:cal_precision_recall(outputs[{{},{1,n1}}], labels[{{},{1,n1}}])
     eval_task2:cal_precision_recall(outputs[{{},{n1+1,n1+n2}}], labels[{{},{n1+1,n1+n2}}])
@@ -120,8 +140,8 @@ for iter=1, num_iters do
     map_all = map_all + batch_map_all
     
     if iter % opt.print_log_interval == 0 then 
-        logger:info(string.format('iter %d: iter_loss = %.6f, map_task1 = %.6f, map_task2 = %.6f, map_all = %.6f', 
-                iter, opt.loss_weight*iter_loss, map_task1/iter, map_task2/iter, map_all/iter))
+        logger:info(string.format('iter %d: map_task1 = %.6f, map_task2 = %.6f, map_all = %.6f', 
+                iter, map_task1/iter, map_task2/iter, map_all/iter))
         print_eval_log()
         collectgarbage() 
     end
