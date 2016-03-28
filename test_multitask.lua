@@ -67,6 +67,8 @@ local loader_task2 = CocoData{image_file_h5 = opt.val_image_file_h5,
 
 if opt.num_test_image == -1 then opt.num_test_image = loader_task1:getNumImages() end
 if opt.num_target == -1 then opt.num_target = loader_task1:getNumTargets() + loader_task2:getNumTargets() end
+assert(opt.batch_size == 1, 'batch_size > 1 is not supported!')
+
 print(opt)
 
 logger:info('Number of testing images: ' .. opt.num_test_image)
@@ -114,17 +116,20 @@ for iter=1, num_iters do
     
     local data1 = loader_task1:getBatch() -- get image and label batches
     local data2 = loader_task2:getBatch(true) -- get label only
-    local images = data1.images:cuda()
     local labels = torch.cat(data1.labels, data2.labels, 2)
     
     if opt.test_mode == 'model' then
+        local images = data1.images:cuda()
         outputs = model:forward(images)
         -- local iter_loss = criterion:forward(outputs, labels:cuda())
     else
         local index = output_loader:read('/index'):partial({idx, idx+opt.batch_size-1})
         assert(torch.all(torch.eq(index, data1.image_ids)), 'error: image ids are not matched!!!')
-        outputs = output_loader:read('/data'):partial({idx, idx+opt.batch_size-1})
+        outputs = output_loader:read('/data'):partial({idx, idx+opt.batch_size-1}, {1, opt.num_target})
+        
         idx = idx+opt.batch_size
+        labels = labels:byte()
+        outputs = outputs:float()
     end
     
     eval_task1:cal_precision_recall(outputs[{{},{1,n1}}], labels[{{},{1,n1}}])
