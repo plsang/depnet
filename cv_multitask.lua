@@ -141,8 +141,10 @@ print('Optimization configurations', optim_config)
 local model, criterion, params, grad_params
 
 local function reset_model()    
-    if not model then
+    if model then
         model = nil
+        params = nil
+        grad_params = nil
         collectgarbage()
     end
     
@@ -150,9 +152,7 @@ local function reset_model()
     criterion = nn.MultiLabelCrossEntropyCriterion(opt.loss_weight):cuda()
     model_utils.init_finetuning_params(model, opt)
     params, grad_params = model:getParameters()
-    print('total number of parameters: ', params:nElement(), grad_params:nElement())
     model_utils.update_param_indices(model, opt, optim_config)
-    print(model.modules)
 end
 
 local n1 = train_loader_task1:getNumTargets()
@@ -334,7 +334,7 @@ function train(lamda)
     return eval_map
 end
 
-local lamdas = {1e-4, 1e-5, 1e-6, 1e-7, 1e-8}
+local lamdas = {1e-5, 1e-6, 1e-7, 1e-8, 1e-9}
 local best_map = 0
 local best_lamda = 0
 for ii = 1,#lamdas do
