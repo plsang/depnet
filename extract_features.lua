@@ -16,10 +16,7 @@ cmd:text('Options')
 
 -- Data input settings
 cmd:option('-coco_data_root', '/net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO', 'path to coco data root')
-cmd:option('-image_file_h5', 'data/coco_val.h5', 'path to the prepressed image data')
-
-cmd:option('-label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
-
+cmd:option('-image_file_h5', 'data/mscoco2014_val_preprocessedimages_msmil.h5', 'path to the prepressed image data')
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_image', -1, 'Number of test image, -1 for testing all (40504)')
 cmd:option('-batch_size', 1, 'Number of image per batch')
@@ -57,7 +54,7 @@ end
 if opt.debug == 1 then dbg = require 'debugger' end
 
 local loader = CocoData{image_file_h5 = opt.image_file_h5, 
-    label_file_h5 = paths.concat(opt.coco_data_root, opt.label_file_h5),
+    noshuffle = true, num_target = opt.num_target,
     batch_size = opt.batch_size}
 
 if opt.num_test_image == -1 then opt.num_test_image = loader:getNumImages() end
@@ -70,16 +67,14 @@ logger:info('Model type: ' .. opt.model_type)
 logger:info('Loading model: ' .. opt.test_cp)
 
 local model = model_utils.load_model(opt):cuda()
-
 if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
     model:remove()  -- remove MIL
     model['modules'][2]:remove()  -- remove sigmoid
     model['modules'][2]:remove()  -- remove fc8
-    print(model['modules'][2])
-    model:add(nn.SpatialMIL('milmaxnor'):cuda()) 
+    model:add(nn.SpatialMIL('milmax'):cuda()) 
+    print(model['modules'])
     opt.num_target = 4096
 end
-
 model:evaluate() 
 
 local myFile = hdf5.open(opt.output_file, 'w')
@@ -100,7 +95,6 @@ local num_iters = torch.ceil(opt.num_test_image/opt.batch_size)
 for iter=1, num_iters do
     local batch = loader:getBatch() -- get image and label batches
     local outputs = model:forward(batch.images:cuda())
-    
     local start_idx = (iter-1)*opt.batch_size + 1
     local end_idx = iter*opt.batch_size
     if end_idx > opt.num_test_image then
