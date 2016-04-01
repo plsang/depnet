@@ -27,7 +27,7 @@ local opt = cmd:parse(arg)
 print(opt)
 
 -- Rescales and normalizes the image
-function preprocess(im)
+local function preprocess(im)
   -- rescale the image  
   im = image.scale(im,565,565,'bilinear'):cuda()
     
