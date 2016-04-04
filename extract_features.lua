@@ -20,22 +20,19 @@ cmd:option('-image_file_h5', 'data/mscoco2014_val_preprocessedimages_msmil.h5', 
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_image', -1, 'Number of test image, -1 for testing all (40504)')
 cmd:option('-batch_size', 1, 'Number of image per batch')
-cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
-cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
-cmd:option('-cp_path', 'cp', 'path to save checkpoints')
+cmd:option('-cp_dir', 'cp', 'checkpoint directory')
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-phase', 'test', 'phase (train/test)')
 cmd:option('-log_mode', 'console', 'console/file.  filename is the testing model file + .log')
 cmd:option('-log_dir', 'log', 'log dir')
-cmd:option('-version', 'v1.5', 'release version')    
+cmd:option('-version', 'v2.0', 'release version')    
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-print_log_interval', 1000, 'Number of test image.')
 cmd:option('-model_type', 'milmaxnor', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-layer', 'fc8', 'fc8, fc7')
 cmd:option('-output_file', '', 'path to output file')
-
 
 cmd:text()
 local opt = cmd:parse(arg)
@@ -49,6 +46,13 @@ if opt.log_mode == 'file' then
     local filename = paths.basename(opt.test_cp, 't7')
     local logfile = paths.concat(dirname, 'test_' .. filename .. '.log')
     logger = logging.file(logfile)
+end
+
+if opt.output_file == '' then
+    local dirname = paths.concat(opt.cp_dir, opt.version)
+    if not paths.dirp(dirname) then paths.mkdir(dirname) end
+    local filename = paths.basename(opt.test_cp, 't7')
+    opt.output_file = paths.concat(dirname, filename .. '_' .. opt.layer .. '.h5')
 end
 
 if opt.debug == 1 then dbg = require 'debugger' end
@@ -75,16 +79,10 @@ if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
     print(model['modules'])
     opt.num_target = 4096
 end
+
 model:evaluate() 
 
 local myFile = hdf5.open(opt.output_file, 'w')
--- local options = hdf5.DataSetOptions()
--- options:setChunked(32, 32)
--- options:setDeflate()
-
---writing data of type string is not supported
--- myFile:write('/columns', model.vocab, options)
-
 local index = torch.LongTensor(opt.num_test_image):zero()
 local data = torch.FloatTensor(opt.num_test_image, opt.num_target):zero()
 
