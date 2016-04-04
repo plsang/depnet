@@ -34,7 +34,7 @@ def upsample_image(im, sz):
 
 def load_image(params):
     
-    im_mean = np.array([[[ 103.939, 116.779, 123.68]]]) # in BGR order
+    im_mean = np.array([[[103.939, 116.779, 123.68]]]) # in BGR order
     
     data = json.load(open(params['input_json'], 'r'))
     
@@ -58,7 +58,7 @@ def load_image(params):
     
     img_size = params['images_size']
     f = h5py.File(params['output_h5'], 'w')
-    images = f.create_dataset('images', (num_images, 3, img_size, img_size), dtype='uint8')
+    images = f.create_dataset('images', (num_images, 3, img_size, img_size), dtype='int16')
     indexes = f.create_dataset('index', (num_images,), dtype='int')
     f.create_dataset('index_shuffle', (num_images,), dtype='int', data=index_shuffle)
     
@@ -66,8 +66,7 @@ def load_image(params):
         #for (img_id, img_file) in sorted_imgs:
         img_id = sorted_imgs[shuffled_i][0]
         img_file = sorted_imgs[shuffled_i][1]
-        
-        
+            
         try:
             # Scipy funciton read image in RGB order
             # I = imread(os.path.join(params['images_root'], img_file))

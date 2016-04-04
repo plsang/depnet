@@ -14,7 +14,7 @@ from random import shuffle, seed
 import logging
 from datetime import datetime
 from preprocess_image import upsample_image
-from multiprocessing import Pool
+from multiprocessing import Pool, Lock
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,6 @@ def load_image(img_path, img_size):
     
     return im_rsz
     
-    
 def preprocess_video(output_file, video_kf_dir, img_size=224, step=2):
     
     img_files = []
@@ -58,11 +57,17 @@ def preprocess_video(output_file, video_kf_dir, img_size=224, step=2):
     num_images = len(sampling_range)
     
     output_dir = os.path.dirname(output_file)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-        
+    
+    try:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+    except OSError, e:
+        if e.errno != 17:
+            raise
+        pass
+    
     f = h5py.File(output_file, 'w')
-    data = f.create_dataset('data', (num_images, 3, img_size, img_size), dtype='uint8')
+    data = f.create_dataset('data', (num_images, 3, img_size, img_size), dtype='int16')
     index = f.create_dataset('index', (num_images,), dtype='int')
     
     for (ii, ss) in enumerate(sampling_range):
@@ -77,6 +82,7 @@ def preprocess_video(output_file, video_kf_dir, img_size=224, step=2):
 
 def parallel_helper(args):
     preprocess_video(*args)
+    
     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s:%(levelname)s: %(message)s')

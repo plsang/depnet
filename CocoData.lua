@@ -64,7 +64,7 @@ function CocoData:getNumTargets()
 end
 
 function CocoData:getBatch(label_only)
-    local image_batch = label_only or torch.ByteTensor(self.batch_size, self.num_channels, self.image_size, self.image_size)
+    local image_batch = label_only or torch.FloatTensor(self.batch_size, self.num_channels, self.image_size, self.image_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
     local image_ids = torch.LongTensor(self.batch_size)
     local idx = self.iterator
