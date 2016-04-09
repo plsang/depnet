@@ -128,5 +128,5 @@ if __name__ == "__main__":
     p.close()
     p.join()
     
-    logger.info('Wrote to %s', params['output_h5'])    
+    logger.info('Wrote to %s', args.output_dir)
     logger.info('Time: %s', datetime.now() - start)

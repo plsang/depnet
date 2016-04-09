@@ -34,11 +34,12 @@ cmd:option('-debug', 0, '1 to turn debug on')
 cmd:option('-model_type', 'milmaxnor', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-layer', 'fc8', 'fc8, fc7')
 cmd:option('-output_file', '', 'path to output file')
+cmd:option('-start_video', 1, 'index of the start video to extract')
+cmd:option('-end_video', -1, 'index of the end video to extract')
 
 
 cmd:text()
 local opt = cmd:parse(arg)
-
 
 -- get all lines from a file, returns an empty 
 -- list/table if the file does not exist
@@ -73,7 +74,11 @@ for i, line in ipairs(textlines) do
     videos[#videos+1] = info
 end
 
-if opt.num_test_video == -1 then opt.num_test_video = #videos end
+
+if opt.start_video < 1 then opt.start_video = 1 end
+if opt.end_video == -1 or opt.end_video > #videos  then opt.end_video = #videos end
+if opt.num_test_video == -1 then opt.num_test_video = opt.end_video - opt.start_video + 1 end
+
 print(opt)
 
 logger:info('Total videos: ' .. #videos)
@@ -104,12 +109,12 @@ model:evaluate()
 
 local myFile = hdf5.open(opt.output_file, 'w')
 
+local timer = torch.Timer()
+
 local index = torch.LongTensor(opt.num_test_video):zero()
 local data = torch.FloatTensor(opt.num_test_video, opt.num_target):zero()
 
-local timer = torch.Timer()
-
-for ii=1,opt.num_test_video do
+for ii=opt.start_video, opt.end_video do
     
     local image_file_h5 = paths.concat(opt.data_root, videos[ii]['location'] .. '.h5')
     if not paths.filep(image_file_h5) then 
@@ -141,8 +146,8 @@ for ii=1,opt.num_test_video do
             feats[{{start_idx, end_idx},{}}] = outputs[{{1,end_idx-start_idx+1},{}}]:float()   -- copy cpu ==> gpu 
         end
         
-        data[ii] = torch.mean(feats, 1)
-        index[ii] = tonumber(string.sub(video_id, 4, #video_id))
+        data[ii-opt.start_video+1] = torch.mean(feats, 1)
+        index[ii-opt.start_video+1] = tonumber(string.sub(video_id, 4, #video_id))
        
         loader:close() 
         feats = nil

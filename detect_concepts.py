@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 import cv2
 from random import shuffle, seed
+import pprint
 
 import logging
 from datetime import datetime
@@ -33,15 +34,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     start = datetime.now()
     
-    print(args)
+    #print(args)
     
-    logger.info('Load input file: %s', args.input_file)
+    #logger.info('Load input file: %s', args.input_file)
     f = h5py.File(args.input_file, "r")
     
-    logger.info('Load vocab file: %s', args.vocab_file_task1)
+    #logger.info('Load vocab file: %s', args.vocab_file_task1)
     vocab1 = json.load(open(os.path.join(args.coco_data_root, args.vocab_file_task1)))
     
-    logger.info('Load vocab file: %s', args.vocab_file_task2)
+    #logger.info('Load vocab file: %s', args.vocab_file_task2)
     vocab2 = json.load(open(os.path.join(args.coco_data_root, args.vocab_file_task2)))
     
     labels1 = np.array(vocab1)
@@ -54,11 +55,11 @@ if __name__ == "__main__":
         ii = args.test_ind
         ind = f['index'][ii]
 
-    print('index: ', ii)
     
     if args.concat:
         print('------ Concepts ------ ')
         feats = f[args.data][ii][0:1000]
+        feats = feats/np.linalg.norm(feats, ord=2)
         indices = (-feats).argsort(axis=None)
         predicts = labels1[indices]
         pairs = [(vocab1[k], feats[k]) for k in indices[:10]]
@@ -66,14 +67,16 @@ if __name__ == "__main__":
 
         print('------ Deps ------ ')
         feats = f[args.data][ii][1000:]
+        feats = feats/np.linalg.norm(feats, ord=2)
         indices = (-feats).argsort(axis=None)
         predicts = labels2[indices]
-        pairs = [(vocab2[k], feats[k]) for k in indices[:10]]
-        print(ind, pairs, '\n')
+        pairs = [(vocab2[k], feats[k]) for k in indices[:20]]
+        pprint.pprint(pairs)
     else:
         print('------ Concepts/Deps ------ ')
         feats = f[args.data][ii]
+        feats = feats/np.linalg.norm(feats, ord=2)
         indices = (-feats).argsort(axis=None)
         predicts = labels2[indices]
-        pairs = [(vocab2[k], feats[k]) for k in indices[:10]]
-        print(ind, pairs, '\n')
+        pairs = [(vocab2[k], feats[k]) for k in indices[:20]]
+        pprint.pprint(pairs)

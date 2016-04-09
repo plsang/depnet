@@ -16,7 +16,7 @@ function CocoData:__init(opt)
         self.images_key = opt.images_key
     end
     
-    print('Loading image data: ', opt.image_file_h5)
+    -- print('Loading image data: ', opt.image_file_h5)
     self.image_data = hdf5.open(opt.image_file_h5, 'r')
     
     local image_data_size = self.image_data:read(self.images_key):dataspaceSize()
