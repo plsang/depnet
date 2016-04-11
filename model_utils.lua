@@ -737,4 +737,26 @@ function model_utils.update_param_indices(model, opt, optim_config)
     
 end
 
+function model_utils.cal_reg_loss(params, optim_config)
+    -- add regularziation loss
+    local reg_loss = 0
+    if optim_config.weightDecay > 0 then
+        if optim_config.reg_type == 1 then
+            reg_loss = optim_config.weightDecay * 
+            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ftb_ind_start-1}}], 1)
+        elseif optim_config.reg_type == 2 then
+            reg_loss = optim_config.weightDecay * 
+            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ftb_ind_start-1}}], 2)
+        elseif optim_config.reg_type == 3 then
+            local tmp_loss = 0
+            -- only use weight for reg_loss, no bias
+            for i=optim_config.ft_ind_start,optim_config.ftb_ind_start-1,optim_config.fc7dim do
+                tmp_loss = tmp_loss + torch.norm(params[{{i,i+optim_config.fc7dim-1}}], 2)
+            end
+            reg_loss = optim_config.weightDecay * tmp_loss
+        end
+    end
+    return reg_loss
+end
+
 return model_utils

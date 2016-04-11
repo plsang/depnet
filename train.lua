@@ -35,6 +35,7 @@ cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CN
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
 cmd:option('-max_iters', 1000000)
+cmd:option('-max_epochs', 10)
 cmd:option('-save_cp_interval', 0, 'to save a check point every interval number of iterations')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
@@ -53,16 +54,17 @@ cmd:option('-learning_rate', 1e-5, 'learning rate for sgd') -- msmil: 0.00001562
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
 cmd:option('-debug', 0, 'turn debug mode on/off')
+cmd:option('-reg_type', 2, '1: L1 regularization, 2: L2 regularization, 3: L2,1 regularization')
 -- these options are for SGD
 cmd:option('-learning_rate_decay', 0, 'decaying rate for sgd')
 cmd:option('-gamma_factor', 0.1, 'factor to reduce learning rate, 0.1 ==> drop 10 times')
-cmd:option('-learning_rate_decay_interval', 80000, 'learning rate for sgd')
+cmd:option('-learning_rate_decay_interval', -1, 'learning rate for sgd')
 cmd:option('-momentum', 0.99, 'momentum for sgd')
-cmd:option('-weight_decay', 0.0005, 'momentum for sgd')
 -- these options are for Adam
 cmd:option('-adam_beta1', 0.9, 'momentum for adam')
 cmd:option('-adam_beta2', 0.999, 'momentum for adam')
 cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
+cmd:option('-weight_decay', 0, 'regularization multiplier')
 --
 
 cmd:text()
@@ -89,12 +91,18 @@ if opt.num_target == -1 then opt.num_target = train_loader:getNumTargets() end
 if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
 if opt.concept_type == '' then opt.concept_type = string.split(paths.basename(opt.train_label_file_h5, '.h5'), '_')[3] end
 if opt.model_id == '' then 
-    opt.model_id = string.format('%s_%s_%s_b%d_bias%f_lr%f', 
-            opt.concept_type, opt.model_type, opt.optim, opt.batch_size, opt.bias_init, opt.learning_rate)
+    opt.model_id = string.format('%s_%s_%s_b%d_bias%f_lr%f_wd%f_l%d', 
+            opt.concept_type, opt.model_type,
+            opt.optim, opt.batch_size, opt.bias_init, 
+            opt.learning_rate, opt.weight_decay, opt.reg_type)
 end
 if opt.save_cp_interval == 0 then 
     opt.save_cp_interval = math.ceil(train_loader:getNumImages()/opt.batch_size)
 end
+if opt.learning_rate_decay_interval == -1 then
+    opt.learning_rate_decay_interval = math.ceil(train_loader:getNumImages()/opt.batch_size)
+end
+opt.iter_per_epoch = math.ceil(train_loader:getNumImages()/opt.batch_size)
 print(opt)
 ------------------------------------------
 
@@ -115,13 +123,14 @@ print('total number of parameters: ', params:nElement(), grad_params:nElement())
 -- note: don't use 'config' as a variable name
 local optim_config = {
     learningRate = opt.learning_rate,
+    weightDecay = opt.weight_decay,
+    reg_type = opt.reg_type,
     w_lr_mult = opt.w_lr_mult,
     b_lr_mult = opt.b_lr_mult,
     ft_lr_mult = opt.ft_lr_mult  -- if w and b have the same learning rate
 }
 
 if opt.optim == 'sgd' then
-    optim_config.weightDecay = opt.weight_decay
     optim_config.momentum = opt.momentum
     optim_config.learningRateDecay = opt.learning_rate_decay
 elseif opt.optim == 'adam' then
@@ -155,18 +164,18 @@ local function eval_loss()
         eval:cal_precision_recall(outputs, data.labels)
         local batch_map = eval:cal_mean_average_precision(outputs:float(), data.labels)
         map = map + batch_map
-        -- handle the case when the number of test images are not divisible by the batch_size
-        if iter == num_iters then
-
-        end
     end    
     
     local loss = opt.loss_weight*total_loss/eval_iters
-    print (' ==> eval loss = ', loss)
-    print (' ==> eval map = ', map/eval_iters)
+    local reg_loss = opt.loss_weight*model_utils.cal_reg_loss(params, optim_config)
     
+    print (' ==> eval loss (loss, reg_loss, all) = ', loss, reg_loss, loss + reg_loss)
+    print (' ==> eval map = ', map/eval_iters)
     eval:print_precision_recall()
+    
     model:training() -- back to the training mode
+    
+    loss = loss + reg_loss
     return loss
 end
 
@@ -186,12 +195,13 @@ end
 
 -- MAIN LOOP --- 
 local iter = 0
+local epoch = 1
 local loss_history = {}
 local val_loss_history = {}
 
 -- Save model
 local function save_model()
-    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_iter' .. iter)
+    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_epoch' .. epoch  .. '.t7')
     local cp = {}
     cp.opt = opt
     cp.iter = iter
@@ -212,7 +222,7 @@ local function save_model()
     end
 
     print('Saving checkpoint to', cp_path)
-    torch.save(cp_path .. '.t7', cp)
+    torch.save(cp_path, cp)
 end
 
 -- First evaluation
@@ -235,13 +245,18 @@ while true do
     elseif opt.optim == 'adam' then
         optim_utils.adam(params, grad_params, optim_config)   
     else
-        error('Unknow optimization method', opt.optim)
+        error('Unknown optimization method', opt.optim)
     end
     
-    if iter % opt.print_log_interval == 0 then 
-        loss_history[iter] = loss
-        print(string.format('%s: iter %d, loss = %f, lr = %g (%.3fs/iter)', 
-                os.date(), iter, opt.loss_weight*loss, optim_config.learningRate, timer:time().real))
+    if iter % opt.print_log_interval == 0 or iter == 1 then 
+        local reg_loss = model_utils.cal_reg_loss(params, optim_config)
+        local total_loss = loss + reg_loss
+        loss_history[iter] = opt.loss_weight*total_loss
+        
+        print(string.format('%s: iter %d, lr = %g, floss = %f, reg_loss = %f, loss = %f (%.3fs/iter)', 
+                os.date(), iter, optim_config.learningRate, 
+                opt.loss_weight*loss, opt.loss_weight*reg_loss, opt.loss_weight*total_loss, 
+                timer:time().real))
     end
    
     -- test loss
@@ -250,11 +265,6 @@ while true do
         val_loss_history[iter] = val_loss
         collectgarbage()
     end
-    
-    -- save checkpoints
-    if (iter % opt.save_cp_interval == 0) then
-        save_model()
-    end
 
     -- Learning rate decay for SGD
     if opt.optim == 'sgd' and iter % opt.learning_rate_decay_interval == 0 then
@@ -262,10 +272,10 @@ while true do
         print('new learning rate', config.learningRate)
     end
     
-    -- Break condition
-    if iter >= opt.max_iters then 
-        break 
-    end
+    if (iter % opt.save_cp_interval == 0) then save_model() end
+    if iter % opt.iter_per_epoch == 0 then epoch = epoch + 1 end
+    if iter >= opt.max_iters or epoch >= opt.max_epochs then break end
+    
 end    
 
 

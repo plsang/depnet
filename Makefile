@@ -65,9 +65,32 @@ vgg-mydepsv4:
 		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg \
 		2>&1 | tee log/train_b4_vgg_mydepsv4.log
 
+vgg-mydepsv4-adam: 
+	CUDA_VISIBLE_DEVICES=6 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-batch_size 4 -optim adam -num_target 21034 -ft_lr_mult 10 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -weight_decay 0.0005 \
+		2>&1 | tee log/train_adam_b4_vgg_mydepsv4_wd0.0005.log
 
+vgg-mydepsv4-sgd: 
+	CUDA_VISIBLE_DEVICES=5 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-batch_size 4 -optim sgd -num_target 21034 -ft_lr_mult 10 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -bias_init -6.58 \
+        -reg_type 2 -weight_decay 0.0005 \
+		2>&1 | tee log/train_sgd_b4_vgg_mydepsv4.log
 
-milmaxnor-mydepsv4:	
+milmaxnor-mydepsv4:
 	CUDA_VISIBLE_DEVICES=7 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
@@ -80,6 +103,34 @@ milmaxnor-mydepsv4:
 		-num_target 21034 -print_log_interval 10 -bias_init -6.58 \
 		2>&1 | tee log/train_b4_milmaxnor_mydepsv4.log
 
+milmaxnor-mydepsv4-adam:
+	CUDA_VISIBLE_DEVICES=7 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -ft_lr_mult 10 -model_type milmaxnor -num_test_image 400 \
+		-num_target 21034 -print_log_interval 10 -bias_init -6.58 \
+        -reg_type 2 -weight_decay 0.0005 \
+		2>&1 | tee log/train_adam_b4_milmaxnor_mydepsv4.log
+        
+milmaxnor-mydepsv4-sgd:	
+	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim sgd -test_interval 1000 -ft_lr_mult 10 -model_type milmaxnor -num_test_image 400 \
+		-num_target 21034 -print_log_interval 10 -bias_init -10 \
+        -reg_type 2 -weight_decay 0.0005 \
+		2>&1 | tee log/train_sgd_b4_milmaxnor_mydepsv4.log
+        
 ### TRAINING MULTITASK MODEL
 
 multitask-milmaxnor-mt1-b4:	
@@ -92,6 +143,28 @@ multitask-milmaxnor-mt1-b4:
 		-print_log_interval 10 -bias_init -6.58 -model_type milmaxnor -multitask_type 1 \
 		2>&1 | tee log/train_b4_milmaxnor_multitask_mt1.log
 
+multitask-milmaxnor-mt1-adam:
+	CUDA_VISIBLE_DEVICES=4 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -ft_lr_mult 10 -num_test_image 400 \
+		-print_log_interval 10 -bias_init -6.58 -model_type milmaxnor -multitask_type 1 \
+        -reg_type 2 -weight_decay 0.0005 \
+		2>&1 | tee log/train_adam_b4_milmaxnor_multitask_mt1.log
+
+multitask-milmaxnor-mt1-b4-sgd:	
+	CUDA_VISIBLE_DEVICES=7 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-batch_size 4 -optim sgd -test_interval 1000 -ft_lr_mult 10 -num_test_image 400 \
+		-print_log_interval 10 -bias_init -10 -model_type milmaxnor -multitask_type 1 \
+        -reg_type 2 -weight_decay 0.0005 \
+		2>&1 | tee log/train_sgd_b4_milmaxnor_multitask_mt1.log
+        
 ### EXTRACT FEATURES
 
 vgg-myconceptsv3-fc8:

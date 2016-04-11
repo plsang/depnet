@@ -21,11 +21,12 @@ function optim_utils.sgd(x, dfdx, config, state)
    
     -- (2) weight decay with single
     if wd ~= 0 then
-        -- this will apply weight decay to bias as well, which is wd*b
-        dfdx:add(wd, x)
-        -- minus wd*b
-        for i=1,#config.bias_indices,2 do 
-           dfdx[{{config.bias_indices[i], config.bias_indices[i+1]}}]:add(-wd, x[{{config.bias_indices[i], config.bias_indices[i+1]}}]) 
+        if config.reg_type == 1 then
+            dfdx:add(torch.sign(x):mul(wd))
+        elseif config.reg_type == 2 then
+            dfdx:add(wd, x)
+        else
+            error('Unknown regularization type: ' .. config.reg_type)
         end
     end
 
@@ -50,15 +51,9 @@ function optim_utils.sgd(x, dfdx, config, state)
     x:add(-clr, dfdx)
     
     -- finetuning layer may need more update
-    x[{{config.ft_ind_start, config.ft_ind_end}}]:add(-(config.w_lr_mult-1)*clr, dfdx[{{config.ft_ind_start, config.ft_ind_end}}])
-    
-    -- bias update twice
-    for i=1,#config.bias_indices,2 do 
-        x[{{config.bias_indices[i], config.bias_indices[i+1]}}]:add(-clr, dfdx[{{config.bias_indices[i], config.bias_indices[i+1]}}]) 
+    if config.ft_lr_mult > 1 then
+        x[{{config.ft_ind_start, config.ft_ind_end}}]:add(-(config.w_lr_mult-1)*clr, dfdx[{{config.ft_ind_start, config.ft_ind_end}}])
     end
-    -- bias update on fine tuning layer, since it already updated twice, minus 2 to the multiplier
-    x[{{config.ftb_ind_start, config.ftb_ind_end}}]:add(-(config.b_lr_mult-2)*clr, dfdx[{{config.ftb_ind_start, config.ftb_ind_end}}])
-    
     
     -- (6) update evaluation counter
     state.evalCounter = state.evalCounter + 1
@@ -92,12 +87,16 @@ function optim_utils.adam(x, dfdx, config, state)
         state.tmp = x.new(#dfdx):zero()
     end
     
+    -- (1) copy param of the frozen layers
+    local frozen_x = x[{{config.frozen_start, config.frozen_end}}]:clone()
+    
     if wd ~= 0 then
         -- regularization only at the finetuned layer
         if config.reg_type == 1 then
-            dfdx[{{ws,we}}]:add(torch.sign(x[{{ws,we}}]):mul(wd))
+            dfdx:add(torch.sign(x):mul(wd))
         elseif config.reg_type == 2 then
-            dfdx[{{ws,we}}]:add(wd, x[{{ws,we}}])
+            dfdx:add(wd, x)
+        --[[
         elseif config.reg_type == 3 then
             for i=ws,we,fc7dim do
                 local xi = x[{{i,i+fc7dim-1}}]
@@ -109,6 +108,7 @@ function optim_utils.adam(x, dfdx, config, state)
                     print('warning: zero norm detected')
                 end
             end
+        --]]
         else
             error('Unknown regularization type: ' .. config.reg_type)
         end
@@ -133,6 +133,9 @@ function optim_utils.adam(x, dfdx, config, state)
             state.tmp[{{config.ft_ind_start, config.ft_ind_end}}])
     end
     
+    -- (7) restore frozen_x
+    x[{{config.frozen_start, config.frozen_end}}]:copy(frozen_x)
+    frozen_x = nil
 end
 
 -- adam_l21 version
