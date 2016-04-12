@@ -704,10 +704,12 @@ function model_utils.update_param_indices(model, opt, optim_config)
     end
     
     optim_config.frozen_end = total_elements
-
+    optim_config.nonfrozen_start = total_elements + 1
+    
     local finetune_graph = model.modules[2]
     assert(finetune_graph.frozen == false)
 
+    local weight_indices = {}
     local bias_indices = {}
     for _, m in ipairs(finetune_graph.modules) do
        if m.weight and m.bias then
@@ -715,6 +717,9 @@ function model_utils.update_param_indices(model, opt, optim_config)
             local wlen = m.weight:nElement()
             local blen = m.bias:nElement()
             local mlen = wlen + blen
+            
+            table.insert(weight_indices, total_elements + 1)
+            table.insert(weight_indices, total_elements + wlen)
             table.insert(bias_indices, total_elements + wlen + 1)
             table.insert(bias_indices, total_elements + mlen)
 
@@ -732,31 +737,56 @@ function model_utils.update_param_indices(model, opt, optim_config)
        end
     end
 
+    optim_config.nonfrozen_end = total_elements
+    optim_config.weight_indices = weight_indices
     optim_config.bias_indices = bias_indices
+    
     assert(optim_config.ft_ind_start, 'Fine tuning layer not found')
     
 end
 
-function model_utils.cal_reg_loss(params, optim_config)
-    -- add regularziation loss
+function model_utils.cal_reg_loss(params, config)
+    
     local reg_loss = 0
-    if optim_config.weightDecay > 0 then
-        if optim_config.reg_type == 1 then
-            reg_loss = optim_config.weightDecay * 
-            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ftb_ind_start-1}}], 1)
-        elseif optim_config.reg_type == 2 then
-            reg_loss = optim_config.weightDecay * 
-            torch.norm(params[{{optim_config.ft_ind_start, optim_config.ftb_ind_start-1}}], 2)
-        elseif optim_config.reg_type == 3 then
-            local tmp_loss = 0
-            -- only use weight for reg_loss, no bias
-            for i=optim_config.ft_ind_start,optim_config.ftb_ind_start-1,optim_config.fc7dim do
-                tmp_loss = tmp_loss + torch.norm(params[{{i,i+optim_config.fc7dim-1}}], 2)
+    local bias_norm = 0
+    
+    if config.weightDecay > 0 then
+        
+        if config.reg_type == 1 then
+            --[[
+            for i=1,#config.weight_indices,2 do 
+                reg_loss = reg_loss + torch.norm(params[{{config.weight_indices[i], config.weight_indices[i+1]}}], 1)
             end
-            reg_loss = optim_config.weightDecay * tmp_loss
+            
+            for i=1,#config.bias_indices,2 do 
+                bias_loss = bias_loss + torch.norm(params[{{config.bias_indices[i], config.bias_indices[i+1]}}], 1)
+            end
+            --]]
+            
+            reg_loss = torch.norm(params[{{config.ft_ind_start, config.ftb_ind_start - 1}}], 1)
+            bias_norm = torch.norm(params[{{config.ftb_ind_start, config.ftb_ind_end}}], 1)
+            
+        elseif config.reg_type == 2 then
+            --[[
+            for i=1,#config.weight_indices,2 do 
+                reg_loss = reg_loss + torch.norm(params[{{config.weight_indices[i], config.weight_indices[i+1]}}], 2)        
+            end
+    
+            for i=1,#config.bias_indices,2 do 
+                bias_loss = bias_loss + torch.norm(params[{{config.bias_indices[i], config.bias_indices[i+1]}}], 2)        
+            end
+            --]]
+            
+            reg_loss = torch.norm(params[{{config.ft_ind_start, config.ftb_ind_start - 1}}], 2)
+            bias_norm = torch.norm(params[{{config.ftb_ind_start, config.ftb_ind_end}}], 2)
+            
         end
+        
+        reg_loss = config.weightDecay * reg_loss
+        bias_norm = config.weightDecay * bias_norm
     end
-    return reg_loss
+    
+    return reg_loss, bias_norm
 end
 
 return model_utils

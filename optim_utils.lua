@@ -1,7 +1,6 @@
 local optim_utils = {}
 
 function optim_utils.sgd(x, dfdx, config, state)
-    -- (0) get/update state
     local config = config or {}
     local state = state or config
     local lr = config.learningRate or 1e-3
@@ -16,53 +15,79 @@ function optim_utils.sgd(x, dfdx, config, state)
     local nevals = state.evalCounter
     assert(not nesterov or (mom > 0 and damp == 0), "Nesterov momentum requires a momentum and zero dampening")
 
-    -- (1) copy param of the frozen layers
-    local frozen_x = x[{{config.frozen_start, config.frozen_end}}]:clone()
+    local x_nonfrozen = x[{{config.nonfrozen_start, config.nonfrozen_end}}]
+    local dfdx_nonfrozen = dfdx[{{config.nonfrozen_start, config.nonfrozen_end}}]
    
-    -- (2) weight decay with single
+     -- regularization on weights only
     if wd ~= 0 then
         if config.reg_type == 1 then
-            dfdx:add(torch.sign(x):mul(wd))
+            for i=1,#config.weight_indices,2 do 
+                local wi_s = config.weight_indices[i] - config.frozen_end
+                local wi_e = config.weight_indices[i+1] - config.frozen_end
+                dfdx_nonfrozen[{{wi_s, wi_e}}]:add(torch.sign(x_nonfrozen[{{wi_s, wi_e}}]):mul(wd))
+            end
         elseif config.reg_type == 2 then
-            dfdx:add(wd, x)
+            for i=1,#config.weight_indices,2 do 
+                local wi_s = config.weight_indices[i] - config.frozen_end
+                local wi_e = config.weight_indices[i+1] - config.frozen_end
+                dfdx_nonfrozen[{{wi_s, wi_e}}]:add(wd, x_nonfrozen[{{wi_s, wi_e}}])
+            end
         else
             error('Unknown regularization type: ' .. config.reg_type)
         end
     end
 
-    -- (3) apply momentum
+    -- apply momentum
     if mom ~= 0 then
         if not state.dfdx then
-            state.dfdx = torch.Tensor():typeAs(dfdx):resizeAs(dfdx):copy(dfdx)
+            state.dfdx = torch.Tensor():typeAs(dfdx_nonfrozen):resizeAs(dfdx_nonfrozen):copy(dfdx_nonfrozen)
         else
-            state.dfdx:mul(mom):add(1-damp, dfdx)
+            state.dfdx:mul(mom):add(1-damp, dfdx_nonfrozen)
         end
         if nesterov then
-            dfdx:add(mom, state.dfdx)
+            dfdx_nonfrozen:add(mom, state.dfdx)
         else
-            dfdx = state.dfdx
+            dfdx_nonfrozen = state.dfdx
         end
     end
 
-    -- (4) learning rate decay (annealing)
+    -- learning rate decay (annealing)
     local clr = lr / (1 + nevals*lrd)
 
-    -- (5) parameter update, this apply the base learning rate
-    x:add(-clr, dfdx)
+    -- parameter update, this apply the base learning rate
+    x_nonfrozen:add(-clr, dfdx_nonfrozen)
     
-    -- finetuning layer may need more update
-    if config.ft_lr_mult > 1 then
-        x[{{config.ft_ind_start, config.ft_ind_end}}]:add(-(config.w_lr_mult-1)*clr, dfdx[{{config.ft_ind_start, config.ft_ind_end}}])
+    -- update bias twice
+    for i=1,#config.bias_indices,2 do 
+        local bi_s = config.bias_indices[i] - config.frozen_end
+        local bi_e = config.bias_indices[i+1] - config.frozen_end
+        x_nonfrozen[{{bi_s, bi_e}}]:add(-clr, dfdx_nonfrozen[{{bi_s, bi_e}}])
     end
     
-    -- (6) update evaluation counter
-    state.evalCounter = state.evalCounter + 1
+    -- finetuning layer needs more update
+    if config.w_lr_mult > 1 and config.b_lr_mult > 2 then
+        
+        -- update weight index
+        local ft_ind_start = config.ft_ind_start - config.frozen_end
+        local ft_ind_end = config.ft_ind_end - config.frozen_end
+        
+        -- update bias index
+        local ftb_ind_start = config.ftb_ind_start - config.frozen_end
+        local ftb_ind_end = config.ftb_ind_end - config.frozen_end
 
-    -- (7) restore frozen_x
-    x[{{config.frozen_start, config.frozen_end}}]:copy(frozen_x)
-    frozen_x = nil
-    -- return x*, f(x) before optimization
-    -- return x, fx
+        x_nonfrozen[{{ft_ind_start, ft_ind_end}}]:add(-(config.w_lr_mult-1)*clr, dfdx_nonfrozen[{{ft_ind_start, ft_ind_end}}])
+        x_nonfrozen[{{ftb_ind_start, ftb_ind_end}}]:add(-(config.b_lr_mult-2)*clr, dfdx_nonfrozen[{{ftb_ind_start, ftb_ind_end}}])
+    end
+    
+    -- copy update back to x
+    x[{{config.nonfrozen_start, config.nonfrozen_end}}]:copy(x_nonfrozen)
+    
+    -- update evaluation counter
+    state.evalCounter = state.evalCounter + 1
+    
+    -- delete tmp variables
+    x_nonfrozen = nil
+    dfdx_nonfrozen = nil
 end
 
 function optim_utils.adam(x, dfdx, config, state)
@@ -76,66 +101,84 @@ function optim_utils.adam(x, dfdx, config, state)
     local we = config.ftb_ind_start - 1  -- end index of finetuned weight
     local fc7dim = config.fc7dim or 4096
     
+    local x_nonfrozen = x[{{config.nonfrozen_start, config.nonfrozen_end}}]
+    local dfdx_nonfrozen = dfdx[{{config.nonfrozen_start, config.nonfrozen_end}}]
+    
     if not state.m then
         --initialization
         state.t = 0
         -- momentum1 m = beta1*m + (1-beta1)*dx
-        state.m = x.new(#dfdx):zero()
+        state.m = x.new(#dfdx_nonfrozen):zero()
         -- mementum2 v = beta2*v + (1-beta2)*(dx**2)
-        state.v = x.new(#dfdx):zero()
+        state.v = x.new(#dfdx_nonfrozen):zero()
         -- tmp tensor to hold the sqrt(v) + epsilon
-        state.tmp = x.new(#dfdx):zero()
+        state.tmp = x.new(#dfdx_nonfrozen):zero()
     end
     
-    -- (1) copy param of the frozen layers
-    local frozen_x = x[{{config.frozen_start, config.frozen_end}}]:clone()
-    
     if wd ~= 0 then
-        -- regularization only at the finetuned layer
+        -- regularization on weights only
         if config.reg_type == 1 then
-            dfdx:add(torch.sign(x):mul(wd))
-        elseif config.reg_type == 2 then
-            dfdx:add(wd, x)
-        --[[
-        elseif config.reg_type == 3 then
-            for i=ws,we,fc7dim do
-                local xi = x[{{i,i+fc7dim-1}}]
-                local ni = torch.norm(xi,2)
-                if ni > 0 then
-                    local d_xi = xi:div(ni)
-                    dfdx[{{i,i+fc7dim-1}}]:add(wd, d_xi)
-                else
-                    print('warning: zero norm detected')
-                end
+            for i=1,#config.weight_indices,2 do 
+                local wi_s = config.weight_indices[i] - config.frozen_end
+                local wi_e = config.weight_indices[i+1] - config.frozen_end
+                dfdx_nonfrozen[{{wi_s, wi_e}}]:add(torch.sign(x_nonfrozen[{{wi_s, wi_e}}]):mul(wd))
             end
-        --]]
+        elseif config.reg_type == 2 then
+            for i=1,#config.weight_indices,2 do 
+                local wi_s = config.weight_indices[i] - config.frozen_end
+                local wi_e = config.weight_indices[i+1] - config.frozen_end
+                dfdx_nonfrozen[{{wi_s, wi_e}}]:add(wd, x_nonfrozen[{{wi_s, wi_e}}])
+            end
         else
             error('Unknown regularization type: ' .. config.reg_type)
         end
     end
     
-    state.m:mul(beta1):add(1-beta1, dfdx)
-    state.v:mul(beta2):addcmul(1-beta2, dfdx, dfdx)
+    state.m:mul(beta1):add(1-beta1, dfdx_nonfrozen)
+    state.v:mul(beta2):addcmul(1-beta2, dfdx_nonfrozen, dfdx_nonfrozen)
     state.tmp:copy(state.v):sqrt():add(epsilon)
+    dfdx_nonfrozen = nil
     
     state.t = state.t + 1
     local biasCorrection1 = 1 - beta1^state.t
     local biasCorrection2 = 1 - beta2^state.t
     local clr = lr * math.sqrt(biasCorrection2)/biasCorrection1
     
-    x:addcdiv(-clr, state.m, state.tmp)
+    -- parameter update
+    x_nonfrozen:addcdiv(-clr, state.m, state.tmp)
     
-    -- finetuning layer needs more update
-    if config.ft_lr_mult > 1 then
-        x[{{config.ft_ind_start, config.ft_ind_end}}]:addcdiv(
-            -(config.ft_lr_mult-1)*clr, 
-            state.m[{{config.ft_ind_start, config.ft_ind_end}}], 
-            state.tmp[{{config.ft_ind_start, config.ft_ind_end}}])
+    -- update bias twice
+    for i=1,#config.bias_indices,2 do 
+        local bi_s = config.bias_indices[i] - config.frozen_end
+        local bi_e = config.bias_indices[i+1] - config.frozen_end
+        x_nonfrozen[{{bi_s, bi_e}}]:addcdiv(-clr, state.m[{{bi_s, bi_e}}], state.tmp[{{bi_s, bi_e}}])
     end
     
-    -- (7) restore frozen_x
-    x[{{config.frozen_start, config.frozen_end}}]:copy(frozen_x)
-    frozen_x = nil
+    -- finetuning layer needs more update
+    if config.w_lr_mult > 1 and config.b_lr_mult > 2 then
+        
+        -- update weight index
+        local ft_ind_start = config.ft_ind_start - config.frozen_end
+        local ft_ind_end = config.ft_ind_end - config.frozen_end
+        
+        -- update bias index
+        local ftb_ind_start = config.ftb_ind_start - config.frozen_end
+        local ftb_ind_end = config.ftb_ind_end - config.frozen_end
+
+        x_nonfrozen[{{ft_ind_start, ft_ind_end}}]:addcdiv(
+            -(config.w_lr_mult-1)*clr, 
+            state.m[{{ft_ind_start, ft_ind_end}}], 
+            state.tmp[{{ft_ind_start, ft_ind_end}}])
+        
+        x_nonfrozen[{{ftb_ind_start, ftb_ind_end}}]:addcdiv(
+            -(config.b_lr_mult-2)*clr, 
+            state.m[{{ftb_ind_start, ftb_ind_end}}], 
+            state.tmp[{{ftb_ind_start, ftb_ind_end}}])
+    end
+    
+    -- copy update back to x
+    x[{{config.nonfrozen_start, config.nonfrozen_end}}]:copy(x_nonfrozen)
+    x_nonfrozen = nil
 end
 
 -- adam_l21 version

@@ -209,13 +209,14 @@ local function eval_loss()
         map_all = map_all + batch_map_all
     end    
     
-    local loss = opt.loss_weight*total_loss/eval_iters
-    local reg_loss = opt.loss_weight*model_utils.cal_reg_loss(params, optim_config)
+    local loss = total_loss/eval_iters
+    local reg_loss, bias_norm = model_utils.cal_reg_loss(params, optim_config)
     
-    print (' ==> eval loss (loss, reg_loss, all) = ', loss, reg_loss, loss + reg_loss)
+    print (' ==> eval loss (loss, reg_loss, bias_norm, all) = ', opt.loss_weight*loss, reg_loss, bias_norm, 
+        opt.loss_weight*(loss + reg_loss))
     print (' ==> eval map (task1, task2, all) = ', map_task1/eval_iters, map_task2/eval_iters, map_all/eval_iters)
     
-    loss = loss + reg_loss
+    loss = opt.loss_weight*(loss + reg_loss)
     
     print('-------------- Task 1 -------------- ')
     eval_task1:print_precision_recall()
@@ -224,7 +225,7 @@ local function eval_loss()
     print('-------------- All -------------- ')
     eval_all:print_precision_recall()
     
-    val_loss_history[iter] = opt.loss_weight*loss
+    val_loss_history[iter] = loss
     
     model:training() -- back to the training mode
     return loss
@@ -334,14 +335,16 @@ while true do
     end
     
     if iter % opt.print_log_interval == 0 or iter == 1 then 
-        local reg_loss = model_utils.cal_reg_loss(params, optim_config)
+        local elapsed_time = timer:time().real
+        local reg_loss, bias_norm = model_utils.cal_reg_loss(params, optim_config)
         local total_loss = loss + reg_loss
         loss_history[iter] = opt.loss_weight*total_loss
         
-        print(string.format('%s: iter %d, lr = %g, floss = %f, reg_loss = %f, loss = %f (%.3fs/iter)', 
+        print(string.format('%s: iter %d, lr = %g, floss = %f, reg_loss = %f, bias_norm = %f, loss = %f (%.3fs/iter)', 
                 os.date(), iter, optim_config.learningRate, 
-                opt.loss_weight*loss, opt.loss_weight*reg_loss, opt.loss_weight*total_loss, 
-                timer:time().real))
+                opt.loss_weight*loss, reg_loss, bias_norm,
+                opt.loss_weight*total_loss, 
+                elapsed_time))
     end
    
     -- test loss

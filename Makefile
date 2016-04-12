@@ -73,7 +73,7 @@ vgg-mydepsv4-adam:
 		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
-		-batch_size 4 -optim adam -num_target 21034 -ft_lr_mult 10 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-batch_size 4 -optim adam -num_target 21034 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
 		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -weight_decay 0.0005 \
 		2>&1 | tee log/train_adam_b4_vgg_mydepsv4_wd0.0005.log
 
@@ -85,9 +85,9 @@ vgg-mydepsv4-sgd:
 		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
-		-batch_size 4 -optim sgd -num_target 21034 -ft_lr_mult 10 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-batch_size 4 -optim sgd -num_target 21034 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
 		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -bias_init -6.58 \
-        -reg_type 2 -weight_decay 0.0005 \
+        	-reg_type 2 -weight_decay 0.0005 \
 		2>&1 | tee log/train_sgd_b4_vgg_mydepsv4.log
 
 milmaxnor-mydepsv4:

@@ -50,7 +50,7 @@ cmd:option('-ft_lr_mult', 1, 'learning multipier for the finetuning layer, same 
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-seed', 123, 'random number generator seed, used to generate initial gaussian weights of the finetune layer')
 cmd:option('-optim', 'adam', 'optimization method: sgd, adam')
-cmd:option('-learning_rate', 1e-5, 'learning rate for sgd') -- msmil: 0.000015625
+cmd:option('-learning_rate', 1e-5, 'learning rate for optim') -- msmil: 0.000015625
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-finetune_layer_name', 'fc8', 'name of the finetuning layer')
 cmd:option('-debug', 0, 'turn debug mode on/off')
@@ -133,6 +133,8 @@ local optim_config = {
 if opt.optim == 'sgd' then
     optim_config.momentum = opt.momentum
     optim_config.learningRateDecay = opt.learning_rate_decay
+    optim_config.nesterov = true
+    optim_config.dampening = 0
 elseif opt.optim == 'adam' then
     optim_config.adam_beta1 = opt.adam_beta1
     optim_config.adam_beta2 = opt.adam_beta2
@@ -166,16 +168,17 @@ local function eval_loss()
         map = map + batch_map
     end    
     
-    local loss = opt.loss_weight*total_loss/eval_iters
-    local reg_loss = opt.loss_weight*model_utils.cal_reg_loss(params, optim_config)
+    local loss = total_loss/eval_iters
+    local reg_loss, bias_norm = model_utils.cal_reg_loss(params, optim_config)
     
-    print (' ==> eval loss (loss, reg_loss, all) = ', loss, reg_loss, loss + reg_loss)
+    print (' ==> eval loss (loss, reg_loss, bias_norm, loss + reg_loss) = ', opt.loss_weight*loss, reg_loss, bias_norm, 
+        opt.loss_weight*(loss + reg_loss))
     print (' ==> eval map = ', map/eval_iters)
     eval:print_precision_recall()
     
     model:training() -- back to the training mode
     
-    loss = loss + reg_loss
+    loss = opt.loss_weight*(loss + reg_loss)
     return loss
 end
 
@@ -249,14 +252,16 @@ while true do
     end
     
     if iter % opt.print_log_interval == 0 or iter == 1 then 
-        local reg_loss = model_utils.cal_reg_loss(params, optim_config)
+        local elapsed_time = timer:time().real
+        local reg_loss, bias_norm = model_utils.cal_reg_loss(params, optim_config)
         local total_loss = loss + reg_loss
         loss_history[iter] = opt.loss_weight*total_loss
         
-        print(string.format('%s: iter %d, lr = %g, floss = %f, reg_loss = %f, loss = %f (%.3fs/iter)', 
+        print(string.format('%s: iter %d, lr = %g, floss = %f, reg_loss = %f, bias_norm = %f, loss = %f (%.3fs/iter)', 
                 os.date(), iter, optim_config.learningRate, 
-                opt.loss_weight*loss, opt.loss_weight*reg_loss, opt.loss_weight*total_loss, 
-                timer:time().real))
+                opt.loss_weight*loss, reg_loss, 
+                bias_norm, opt.loss_weight*total_loss, 
+                elapsed_time))
     end
    
     -- test loss
