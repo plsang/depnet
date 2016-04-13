@@ -65,7 +65,7 @@ function optim_utils.sgd(x, dfdx, config, state)
     end
     
     -- finetuning layer needs more update
-    if config.w_lr_mult > 1 and config.b_lr_mult > 2 then
+    if config.w_lr_mult > 1 and config.b_lr_mult > 3 then
         
         -- update weight index
         local ft_ind_start = config.ft_ind_start - config.frozen_end
@@ -76,7 +76,7 @@ function optim_utils.sgd(x, dfdx, config, state)
         local ftb_ind_end = config.ftb_ind_end - config.frozen_end
 
         x_nonfrozen[{{ft_ind_start, ft_ind_end}}]:add(-(config.w_lr_mult-1)*clr, dfdx_nonfrozen[{{ft_ind_start, ft_ind_end}}])
-        x_nonfrozen[{{ftb_ind_start, ftb_ind_end}}]:add(-(config.b_lr_mult-2)*clr, dfdx_nonfrozen[{{ftb_ind_start, ftb_ind_end}}])
+        x_nonfrozen[{{ftb_ind_start, ftb_ind_end}}]:add(-(config.b_lr_mult-3)*clr, dfdx_nonfrozen[{{ftb_ind_start, ftb_ind_end}}])
     end
     
     -- copy update back to x
@@ -155,7 +155,7 @@ function optim_utils.adam(x, dfdx, config, state)
     end
     
     -- finetuning layer needs more update
-    if config.w_lr_mult > 1 and config.b_lr_mult > 2 then
+    if config.w_lr_mult > 1 and config.b_lr_mult > 3 then
         
         -- update weight index
         local ft_ind_start = config.ft_ind_start - config.frozen_end
@@ -171,7 +171,7 @@ function optim_utils.adam(x, dfdx, config, state)
             state.tmp[{{ft_ind_start, ft_ind_end}}])
         
         x_nonfrozen[{{ftb_ind_start, ftb_ind_end}}]:addcdiv(
-            -(config.b_lr_mult-2)*clr, 
+            -(config.b_lr_mult-3)*clr, 
             state.m[{{ftb_ind_start, ftb_ind_end}}], 
             state.tmp[{{ftb_ind_start, ftb_ind_end}}])
     end

@@ -782,8 +782,6 @@ function model_utils.cal_reg_loss(params, config)
             
         end
         
-        reg_loss = config.weightDecay * reg_loss
-        bias_norm = config.weightDecay * bias_norm
     end
     
     return reg_loss, bias_norm

@@ -155,31 +155,32 @@ local function eval_loss()
     
     print(' ==> evaluating ...') 
     local eval_iters = torch.ceil(opt.num_test_image/opt.batch_size)
-    local total_loss = 0
+    local sum_loss = 0
     local map = 0
     for iter=1, eval_iters do
         local data = val_loader:getBatch()
         local outputs = model:forward(data.images:cuda())
         local iter_loss = criterion:forward(outputs, data.labels:cuda())
-        total_loss = total_loss + iter_loss 
+        sum_loss = sum_loss + iter_loss 
         
         eval:cal_precision_recall(outputs, data.labels)
         local batch_map = eval:cal_mean_average_precision(outputs:float(), data.labels)
         map = map + batch_map
     end    
     
-    local loss = total_loss/eval_iters
-    local reg_loss, bias_norm = model_utils.cal_reg_loss(params, optim_config)
+    local loss = sum_loss/eval_iters
+    local weight_norm, bias_norm = model_utils.cal_reg_loss(params, optim_config)
+    local total_loss = loss + weight_norm * optim_config.weightDecay
     
-    print (' ==> eval loss (loss, reg_loss, bias_norm, loss + reg_loss) = ', opt.loss_weight*loss, reg_loss, bias_norm, 
-        opt.loss_weight*(loss + reg_loss))
+    print (' ==> eval loss (loss, weight_norm, bias_norm, total_loss) = ', opt.loss_weight*loss, weight_norm, bias_norm, 
+        opt.loss_weight*total_loss)
+    
     print (' ==> eval map = ', map/eval_iters)
     eval:print_precision_recall()
     
     model:training() -- back to the training mode
     
-    loss = opt.loss_weight*(loss + reg_loss)
-    return loss
+    return total_loss
 end
 
 local function feval(x)
@@ -253,13 +254,13 @@ while true do
     
     if iter % opt.print_log_interval == 0 or iter == 1 then 
         local elapsed_time = timer:time().real
-        local reg_loss, bias_norm = model_utils.cal_reg_loss(params, optim_config)
-        local total_loss = loss + reg_loss
+        local weight_norm, bias_norm = model_utils.cal_reg_loss(params, optim_config)
+        local total_loss = loss + weight_norm * optim_config.weightDecay
         loss_history[iter] = opt.loss_weight*total_loss
         
-        print(string.format('%s: iter %d, lr = %g, floss = %f, reg_loss = %f, bias_norm = %f, loss = %f (%.3fs/iter)', 
+        print(string.format('%s: iter %d, lr = %g, loss = %f, weight_norm = %f, bias_norm = %f, total loss = %f (%.3fs/iter)', 
                 os.date(), iter, optim_config.learningRate, 
-                opt.loss_weight*loss, reg_loss, 
+                opt.loss_weight*loss, weight_norm, 
                 bias_norm, opt.loss_weight*total_loss, 
                 elapsed_time))
     end
@@ -267,14 +268,14 @@ while true do
     -- test loss
     if (iter % opt.test_interval == 0) then
         local val_loss = eval_loss()
-        val_loss_history[iter] = val_loss
+        val_loss_history[iter] = opt.loss_weight*val_loss
         collectgarbage()
     end
 
     -- Learning rate decay for SGD
     if opt.optim == 'sgd' and iter % opt.learning_rate_decay_interval == 0 then
-        config.learningRate = config.learningRate * opt.gamma_factor
-        print('new learning rate', config.learningRate)
+        optim_config.learningRate = optim_config.learningRate * opt.gamma_factor
+        print('new learning rate', optim_config.learningRate)
     end
     
     if (iter % opt.save_cp_interval == 0) then save_model() end
