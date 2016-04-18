@@ -33,7 +33,7 @@ prepo_med_vgg:
 ### TRAINING CONCEPT MODEL
 
 vgg-myconceptsv3: 
-	CUDA_VISIBLE_DEVICES=5 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=5 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
 		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
@@ -42,7 +42,7 @@ vgg-myconceptsv3:
 		2>&1 | tee log/train_b4_vgg_myconceptsv3.log
 
 milmaxnor-myconceptsv3:	
-	CUDA_VISIBLE_DEVICES=5 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=5 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
 		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_msmil.h5 \
@@ -54,7 +54,7 @@ milmaxnor-myconceptsv3:
 ### TRAINING DEPENDENCY MODEL
 
 vgg-mydepsv4: 
-	CUDA_VISIBLE_DEVICES=6 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=6 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
 		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
@@ -65,8 +65,8 @@ vgg-mydepsv4:
 		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg \
 		2>&1 | tee log/train_b4_vgg_mydepsv4.log
 
-vgg-mydepsv4-adam: 
-	CUDA_VISIBLE_DEVICES=7 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+vgg-mydepsv4-adam-4: 
+	CUDA_VISIBLE_DEVICES=3 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
 		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
@@ -74,11 +74,33 @@ vgg-mydepsv4-adam:
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
 		-batch_size 4 -optim adam -num_target 21034 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
-		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -weight_decay 1e-4 -bias_init -6.58 \
-		2>&1 | tee log/train_adam_b4_vgg_mydepsv4_wd0.0005.log
+		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -weight_decay 1e-4 -bias_init 0 \
+		2>&1 | tee log/train_adam_b4_vgg_mydepsv4_wd1e-4_bias0.log
+vgg-mydepsv4-adam-5: 
+	CUDA_VISIBLE_DEVICES=4 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-batch_size 4 -optim adam -num_target 21034 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -weight_decay 1e-5 -bias_init 0 \
+		2>&1 | tee log/train_adam_b4_vgg_mydepsv4_wd1e-5_bias0.log
+vgg-mydepsv4-adam-6: 
+	CUDA_VISIBLE_DEVICES=6 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
+		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-batch_size 4 -optim adam -num_target 21034 -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-vocab_file mscoco2014_train_mydepsv4vocab.json -model_type vgg -weight_decay 1e-6 -bias_init 0 \
+		2>&1 | tee log/train_adam_b4_vgg_mydepsv4_wd1e-6_bias0.log
 
 vgg-mydepsv4-sgd: 
-	CUDA_VISIBLE_DEVICES=5 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=5 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
 		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
@@ -91,7 +113,7 @@ vgg-mydepsv4-sgd:
 		2>&1 | tee log/train_sgd_b4_vgg_mydepsv4.log
 
 milmaxnor-mydepsv4:
-	CUDA_VISIBLE_DEVICES=7 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=7 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
 		-vocab_file mscoco2014_train_mydepsv4vocab.json \
@@ -104,7 +126,7 @@ milmaxnor-mydepsv4:
 		2>&1 | tee log/train_b4_milmaxnor_mydepsv4.log
 
 milmaxnor-mydepsv4-adam:
-	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=4 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
 		-vocab_file mscoco2014_train_mydepsv4vocab.json \
@@ -118,7 +140,7 @@ milmaxnor-mydepsv4-adam:
 		2>&1 | tee log/train_adam_b4_milmaxnor_mydepsv4.log
         
 milmaxnor-mydepsv4-sgd:	
-	CUDA_VISIBLE_DEVICES=4 th -i train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+	CUDA_VISIBLE_DEVICES=7 th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
 		-train_label_file_h5 mscoco2014_train_mydepsv4.h5 \
 		-val_label_file_h5 mscoco2014_val_mydepsv4.h5 \
 		-vocab_file mscoco2014_train_mydepsv4vocab.json \
@@ -165,6 +187,66 @@ multitask-milmaxnor-mt1-sgd:
  	        -reg_type 2 -weight_decay 0.0005 \
 		2>&1 | tee log/train_sgd_b4_milmaxnor_multitask_mt1.log
 multitask-vgg-mt1-sgd:	
+	CUDA_VISIBLE_DEVICES=6 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-batch_size 4 -optim sgd -test_interval 1000 -num_test_image 400 \
+		-print_log_interval 10 -bias_init -6.58 -model_type vgg -multitask_type 1 \
+ 	        -reg_type 2 -weight_decay 0 \
+		2>&1 | tee log/train_sgd_b4_vgg_multitask_mt1.log
+multitask-vgg-mt1-adam-0:	
+	CUDA_VISIBLE_DEVICES=4 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -num_test_image 400 \
+		-print_log_interval 10 -bias_init 0 -model_type vgg -multitask_type 1 \
+ 	        -reg_type 2 -weight_decay 0 \
+		2>&1 | tee log/train_adam_b4_vgg_multitask_mt1_bias0.log
+multitask-vgg-mt1-adam-4:	
+	CUDA_VISIBLE_DEVICES=4 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -num_test_image 400 \
+		-print_log_interval 10 -bias_init 0 -model_type vgg -multitask_type 1 \
+ 	        -reg_type 2 -weight_decay 1e-4 \
+		2>&1 | tee log/train_adam_b4_vgg_multitask_mt1_wd1e-4_bias0.log
+multitask-vgg-mt1-adam-5:	
+	CUDA_VISIBLE_DEVICES=7 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -num_test_image 400 \
+		-print_log_interval 10 -bias_init 0 -model_type vgg -multitask_type 1 \
+ 	        -reg_type 2 -weight_decay 1e-5 \
+		2>&1 | tee log/train_adam_b4_vgg_multitask_mt1_wd1e-5_bias0.log
+multitask-vgg-mt1-adam-6:	
+	CUDA_VISIBLE_DEVICES=5 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-batch_size 4 -optim adam -test_interval 1000 -num_test_image 400 \
+		-print_log_interval 10 -bias_init 0 -model_type vgg -multitask_type 1 \
+ 	        -reg_type 2 -weight_decay 1e-6 \
+		2>&1 | tee log/train_adam_b4_vgg_multitask_mt1_wd1e-6_bias0.log
+multitask-vgg-mt1-sgd-4:	
+	CUDA_VISIBLE_DEVICES=4 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-batch_size 4 -optim sgd -test_interval 1000 -num_test_image 400 \
+		-print_log_interval 10 -bias_init -6.58 -model_type vgg -multitask_type 1 \
+ 	        -reg_type 2 -weight_decay 1e-4 \
+		2>&1 | tee log/train_sgd_b4_vgg_multitask_mt1_wd1e-4.log
+multitask-vgg-mt1-sgd-5:	
 	CUDA_VISIBLE_DEVICES=7 th train_multitask.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
                 -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
                 -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
@@ -172,8 +254,8 @@ multitask-vgg-mt1-sgd:
 		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
 		-batch_size 4 -optim sgd -test_interval 1000 -num_test_image 400 \
 		-print_log_interval 10 -bias_init -6.58 -model_type vgg -multitask_type 1 \
- 	        -reg_type 2 -weight_decay 0.0005 \
-		2>&1 | tee log/train_sgd_b4_vgg_multitask_mt1.log
+ 	        -reg_type 2 -weight_decay 1e-5 \
+		2>&1 | tee log/train_sgd_b4_vgg_multitask_mt1_wd1e-5.log
         
 ### EXTRACT FEATURES
 
@@ -206,6 +288,51 @@ milmaxnor-mydepsv4-fc8-epc:
 	CUDA_VISIBLE_DEVICES=5 th extract_features.lua -log_mode console -test_cp cp/model_mydepsv4_milmaxnor_adam_b4_bias-6.580000_lr0.000010_iter103480.t7 \
 			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_msmil.h5 \
 			-batch_size 8 -model_type milmaxnor -num_target 21034 -print_log_interval 1000
+vgg-sgd-mydepsv4-fc8-epc:
+	CUDA_VISIBLE_DEVICES=6 th extract_features.lua -log_mode console -test_cp cp/model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch1.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 21034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=6 th extract_features.lua -log_mode console -test_cp cp/model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch2.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 21034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=6 th extract_features.lua -log_mode console -test_cp cp/model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch3.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 21034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=6 th extract_features.lua -log_mode console -test_cp cp/model_mydepsv4_vgg_adam_b4_bias-6.580000_lr0.000010_wd0.000100_l2_epoch1.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 21034 -print_log_interval 1000 -version v1.8
+
+extract-vgg-adam-mt1-fc8-epc:
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000000_l2_epoch1.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000100_l2_epoch1.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch1.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch1.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch2.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch3.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch2.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch3.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch4.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features.lua -log_mode console -test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch4.t7 \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-batch_size 8 -model_type vgg -num_target 22034 -print_log_interval 1000 -version v1.8
 milmaxnor-multitask-fc8:
 	CUDA_VISIBLE_DEVICES=6 th extract_features.lua -log_mode console \
 			-test_cp cp/model_multitask_milmaxnor_mt1_adam_b4_bias-6.580000_lr0.000010_wd0.000000_l2_epoch0.t7 \
@@ -280,6 +407,33 @@ test-milmaxnor-multitask-fc8-epc:
 			-test_mode file -test_cp cp/v2.0/model_multitask_milmaxnor_mt1_adam_b4_bias-6.580000_lr0.000010_wd0.000000_l2_epoch4_fc8.h5 \
 			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_msmil.h5 \
 			-model_type milmaxnor -print_log_interval 10000 
+test-vgg-sgd-mydepsv4-fc8-epc:
+	CUDA_VISIBLE_DEVICES=4 th test.lua -log_mode file -test_cp cp/v1.8/model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch1_fc8.h5 \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-val_label_file_h5 mscoco2014_val_mydepsv4.h5 -model_type vgg -test_mode file
+	CUDA_VISIBLE_DEVICES=4 th test.lua -log_mode file -test_cp cp/v1.8/model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch2_fc8.h5 \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-val_label_file_h5 mscoco2014_val_mydepsv4.h5 -model_type vgg -test_mode file
+	CUDA_VISIBLE_DEVICES=4 th test.lua -log_mode file -test_cp cp/v1.8/model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch3_fc8.h5 \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-val_label_file_h5 mscoco2014_val_mydepsv4.h5 -model_type vgg -test_mode file
+test-vgg-adam-mydepsv4-fc8-epc:
+	CUDA_VISIBLE_DEVICES=4 th test.lua -log_mode file -test_cp cp/v1.8/model_mydepsv4_vgg_adam_b4_bias-6.580000_lr0.000010_wd0.000100_l2_epoch1_fc8.h5 \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-val_label_file_h5 mscoco2014_val_mydepsv4.h5 -model_type vgg -test_mode file
+test-vgg-adam-mt1-fc8-epc:
+	CUDA_VISIBLE_DEVICES=7 th test_multitask.lua -log_mode file \
+			-test_cp cp/v1.8/model_multitask_vgg_mt1_adam_b4_bias-6.580000_lr0.000010_wd0.000100_l2_epoch1_fc8.h5 \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-model_type vgg -test_mode file
+	CUDA_VISIBLE_DEVICES=7 th test_multitask.lua -log_mode file \
+			-test_cp cp/v1.8/model_multitask_vgg_mt1_adam_b4_bias-6.580000_lr0.000010_wd0.000010_l2_epoch1_fc8.h5 \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-model_type vgg -test_mode file
+	CUDA_VISIBLE_DEVICES=7 th test_multitask.lua -log_mode file \
+			-test_cp cp/v1.8/model_multitask_vgg_mt1_adam_b4_bias-6.580000_lr0.000010_wd0.000001_l2_epoch1_fc8.h5 \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-model_type vgg -test_mode file
 ### 
 
 test_vgg:
@@ -370,22 +524,88 @@ extract-med-fc8-2:
 			-output_file $(MSCOCO_DATA_ROOT)/mscoco2014_med_depnet_fc8_2.h5 -layer fc8 \
 			-model_type milmaxnor -num_target 22034 \
 			2>&1 | tee log/extract_med_fc8_2.log
-extract-med-fc8-vgg-1:
+extract-med-fc8-vgg:
 	CUDA_VISIBLE_DEVICES=6 th extract_features_med.lua -log_mode console \
 			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
-			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_iter20696.t7 \
-			-batch_size 8 -start_video 1 -end_video 18000 \
-			-output_file $(MSCOCO_DATA_ROOT)/mscoco2014_med_depnet_fc8_vgg_1.h5 -layer fc8 \
-			-model_type vgg -num_target 21034 \
-			2>&1 | tee log/extract_med_fc8_vgg_1.log
-extract-med-fc8-vgg-2:
+			-test_cp cp/model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch3.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 21034 -version v1.8 \
+			2>&1 | tee log/extract_model_mydepsv4_vgg_sgd_b4_bias-6.580000_lr0.000010_wd0.000500_l2_epoch3.log
+extract-med-fc8-vgg-mt1:
+	CUDA_VISIBLE_DEVICES=6 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch1.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 22034 -version v1.8
+	CUDA_VISIBLE_DEVICES=6 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch1.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 22034 -version v1.8
+	CUDA_VISIBLE_DEVICES=6 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000100_l2_epoch1.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 22034 -version v1.8
+	CUDA_VISIBLE_DEVICES=6 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000000_l2_epoch1.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 22034 -version v1.8
+extract-med-fc7-vgg-mt1:
 	CUDA_VISIBLE_DEVICES=5 th extract_features_med.lua -log_mode console \
 			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
-			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_iter20696.t7 \
-			-batch_size 8 -start_video 18001 -end_video 35913 \
-			-output_file $(MSCOCO_DATA_ROOT)/mscoco2014_med_depnet_fc8_vgg_2.h5 -layer fc8 \
-			-model_type vgg -num_target 21034 \
-			2>&1 | tee log/extract_med_fc8_vgg_2.log
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch1.t7 \
+			-batch_size 32 -layer fc7 \
+			-model_type vgg -num_target 22034 -version v1.8
+	CUDA_VISIBLE_DEVICES=5 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch1.t7 \
+			-batch_size 32 -layer fc7 \
+			-model_type vgg -num_target 22034 -version v1.8
+	CUDA_VISIBLE_DEVICES=5 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000100_l2_epoch1.t7 \
+			-batch_size 32 -layer fc7 \
+			-model_type vgg -num_target 22034 -version v1.8
+	CUDA_VISIBLE_DEVICES=5 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_multitask_vgg_mt1_adam_b4_bias0.000000_lr0.000010_wd0.000000_l2_epoch1.t7 \
+			-batch_size 32 -layer fc7 \
+			-model_type vgg -num_target 22034 -version v1.8
+extract-med-fc8-vgg-adam-mydepsv4-e1:
+	CUDA_VISIBLE_DEVICES=3 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch1.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 21034 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch1.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 21034 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_wd0.000100_l2_epoch1.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 21034 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_wd0.000001_l2_epoch2.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 21034 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_wd0.000010_l2_epoch2.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 21034 -version v1.8
+	CUDA_VISIBLE_DEVICES=3 th extract_features_med.lua -log_mode console \
+			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-test_cp cp/model_mydepsv4_vgg_adam_b4_bias0.000000_lr0.000010_wd0.000100_l2_epoch2.t7 \
+			-batch_size 8 -layer fc8 \
+			-model_type vgg -num_target 21034 -version v1.8
+
+
 extract-med-fc8-vgg-myconceptsv3:
 	CUDA_VISIBLE_DEVICES=5 th extract_features_med.lua -log_mode console \
 			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \

@@ -33,7 +33,7 @@ cmd:option('-log_mode', 'console', 'console/file.  filename is the testing model
 cmd:option('-log_dir', 'log', 'log dir')
 cmd:option('-version', 'v2.0', 'release version')    
 cmd:option('-debug', 0, '1 to turn debug on')    
-cmd:option('-print_log_interval', 1000, 'Number of test image.')
+cmd:option('-print_log_interval', 10000, 'Number of test image.')
 cmd:option('-model_type', 'vgg', 'vgg, vggbn, milmax, milnor')
 cmd:option('-test_mode', 'model', 'model/file: test from a model or from a predicted file')
 

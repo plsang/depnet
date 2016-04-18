@@ -749,39 +749,35 @@ function model_utils.cal_reg_loss(params, config)
     
     local reg_loss = 0
     local bias_norm = 0
-    
-    if config.weightDecay > 0 then
         
-        if config.reg_type == 1 then
-            --[[
-            for i=1,#config.weight_indices,2 do 
-                reg_loss = reg_loss + torch.norm(params[{{config.weight_indices[i], config.weight_indices[i+1]}}], 1)
-            end
-            
-            for i=1,#config.bias_indices,2 do 
-                bias_loss = bias_loss + torch.norm(params[{{config.bias_indices[i], config.bias_indices[i+1]}}], 1)
-            end
-            --]]
-            
-            reg_loss = torch.norm(params[{{config.ft_ind_start, config.ftb_ind_start - 1}}], 1)
-            bias_norm = torch.norm(params[{{config.ftb_ind_start, config.ftb_ind_end}}], 1)
-            
-        elseif config.reg_type == 2 then
-            --[[
-            for i=1,#config.weight_indices,2 do 
-                reg_loss = reg_loss + torch.norm(params[{{config.weight_indices[i], config.weight_indices[i+1]}}], 2)        
-            end
-    
-            for i=1,#config.bias_indices,2 do 
-                bias_loss = bias_loss + torch.norm(params[{{config.bias_indices[i], config.bias_indices[i+1]}}], 2)        
-            end
-            --]]
-            
-            reg_loss = torch.norm(params[{{config.ft_ind_start, config.ftb_ind_start - 1}}], 2)
-            bias_norm = torch.norm(params[{{config.ftb_ind_start, config.ftb_ind_end}}], 2)
-            
-        end
-        
+    if config.reg_type == 1 then
+        --[[
+        for i=1,#config.weight_indices,2 do 
+        reg_loss = reg_loss + torch.norm(params[{{config.weight_indices[i], config.weight_indices[i+1]}}], 1)
+    end
+
+        for i=1,#config.bias_indices,2 do 
+        bias_loss = bias_loss + torch.norm(params[{{config.bias_indices[i], config.bias_indices[i+1]}}], 1)
+    end
+        --]]
+
+        reg_loss = torch.norm(params[{{config.ft_ind_start, config.ftb_ind_start - 1}}], 1)
+        bias_norm = torch.norm(params[{{config.ftb_ind_start, config.ftb_ind_end}}], 1)
+
+    elseif config.reg_type == 2 then
+        --[[
+        for i=1,#config.weight_indices,2 do 
+        reg_loss = reg_loss + torch.norm(params[{{config.weight_indices[i], config.weight_indices[i+1]}}], 2)        
+    end
+
+        for i=1,#config.bias_indices,2 do 
+        bias_loss = bias_loss + torch.norm(params[{{config.bias_indices[i], config.bias_indices[i+1]}}], 2)        
+    end
+        --]]
+
+        reg_loss = torch.norm(params[{{config.ft_ind_start, config.ftb_ind_start - 1}}], 2)
+        bias_norm = torch.norm(params[{{config.ftb_ind_start, config.ftb_ind_end}}], 2)
+
     end
     
     return reg_loss, bias_norm

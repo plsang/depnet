@@ -33,6 +33,7 @@ cmd:option('-version', 'v1.5', 'release version')
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-model_type', 'milmaxnor', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-layer', 'fc8', 'fc8, fc7')
+cmd:option('-coco_data_root', 'data/Microsoft_COCO', 'path to coco data root')
 cmd:option('-output_file', '', 'path to output file')
 cmd:option('-start_video', 1, 'index of the start video to extract')
 cmd:option('-end_video', -1, 'index of the end video to extract')
@@ -63,6 +64,13 @@ if opt.log_mode == 'file' then
     logger = logging.file(logfile)
 end
 
+if opt.output_file == '' then
+    local dirname = paths.concat(opt.coco_data_root, opt.version)
+    if not paths.dirp(dirname) then paths.mkdir(dirname) end
+    local filename = paths.basename(opt.test_cp, 't7')
+    opt.output_file = paths.concat(dirname, filename .. '_med_' .. opt.layer .. '.h5')
+end
+
 if opt.debug == 1 then dbg = require 'debugger' end
 
 logger:info('Loading video info: ' .. opt.input_jsonl)
@@ -89,7 +97,7 @@ logger:info('Loading model: ' .. opt.test_cp)
 
 local model = model_utils.load_model(opt):cuda()
 
-if opt.model_type == 'milmaxnor' and (opt.layer == 'fc7' or opt.layer == 'fc6') then
+if opt.layer == 'fc7' or opt.layer == 'fc6' then
     model:remove()  -- remove MIL
     model['modules'][2]:remove()  -- remove sigmoid
     model['modules'][2]:remove()  -- remove fc8
@@ -100,9 +108,12 @@ if opt.model_type == 'milmaxnor' and (opt.layer == 'fc7' or opt.layer == 'fc6') 
         model['modules'][2]:remove()  -- remove spatial convolution
     end
     
-    print(model['modules'][2])
-    model:add(nn.SpatialMIL('milmaxnor'):cuda()) 
+    if opt.model_type == 'milmaxnor' then
+    	model:add(nn.SpatialMIL('milmaxnor'):cuda()) 
+    end
+
     opt.num_target = 4096
+    print(model['modules'][2])
 end
 
 model:evaluate() 
