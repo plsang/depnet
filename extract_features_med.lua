@@ -16,7 +16,7 @@ cmd:text()
 cmd:text('Options')
 
 -- Data input settings
-cmd:option('-data_root', '/net/per610a/export/das11f/plsang/trecvidmed/preprocessed', 'path to preprocessed data root')
+cmd:option('-video_root', '/net/per610a/export/das11f/plsang/trecvidmed/preprocessed', 'path to preprocessed data root')
 cmd:option('-input_jsonl', '/net/per610a/export/das11f/plsang/trecvidmed/metadata/med_videos.jsonl', 'path to list of video')
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_video', -1, 'Number of test video, -1 for testing all (40504)')
@@ -29,11 +29,11 @@ cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'test', 'phase (train/test)')
 cmd:option('-log_mode', 'console', 'console/file.  filename is the testing model file + .log')
 cmd:option('-log_dir', 'log', 'log dir')
-cmd:option('-version', 'v1.5', 'release version')    
+cmd:option('-version', '', 'release version')    
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-model_type', 'milmaxnor', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-layer', 'fc8', 'fc8, fc7')
-cmd:option('-coco_data_root', 'data/Microsoft_COCO', 'path to coco data root')
+cmd:option('-med_root', 'data/MED', 'path to coco data root')
 cmd:option('-output_file', '', 'path to output file')
 cmd:option('-start_video', 1, 'index of the start video to extract')
 cmd:option('-end_video', -1, 'index of the end video to extract')
@@ -65,7 +65,7 @@ if opt.log_mode == 'file' then
 end
 
 if opt.output_file == '' then
-    local dirname = paths.concat(opt.coco_data_root, opt.version)
+    local dirname = paths.concat(opt.med_root, opt.version)
     if not paths.dirp(dirname) then paths.mkdir(dirname) end
     local filename = paths.basename(opt.test_cp, 't7')
     opt.output_file = paths.concat(dirname, filename .. '_med_' .. opt.layer .. '.h5')
@@ -127,7 +127,7 @@ local data = torch.FloatTensor(opt.num_test_video, opt.num_target):zero()
 
 for ii=opt.start_video, opt.end_video do
     
-    local image_file_h5 = paths.concat(opt.data_root, videos[ii]['location'] .. '.h5')
+    local image_file_h5 = paths.concat(opt.video_root, videos[ii]['location'] .. '.h5')
     if not paths.filep(image_file_h5) then 
         logger:info('Warning: file not found ' .. image_file_h5)
     else
@@ -153,7 +153,7 @@ for ii=opt.start_video, opt.end_video do
             if end_idx > num_test_image then
                 end_idx = num_test_image
             end
-
+            
             feats[{{start_idx, end_idx},{}}] = outputs[{{1,end_idx-start_idx+1},{}}]:float()   -- copy cpu ==> gpu 
         end
         

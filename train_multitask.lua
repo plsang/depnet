@@ -7,7 +7,6 @@ require 'cudnn'
 local cjson = require 'cjson'
 
 require 'CocoData'
---require 'MultilabelCrossEntropyCriterion'
 require 'nn.MultiLabelCrossEntropyCriterion'
 require 'eval_utils'
 
@@ -72,6 +71,7 @@ cmd:option('-fc7dim', 4096, 'fc7 dimension')
 cmd:option('-adam_beta1', 0.9, 'momentum for adam')
 cmd:option('-adam_beta2', 0.999, 'momentum for adam')
 cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
+cmd:option('-version', '', 'release version')    
 
 cmd:text()
 local opt = cmd:parse(arg)
@@ -100,8 +100,8 @@ if opt.num_target == -1 then opt.num_target = train_loader_task1:getNumTargets()
 if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
 if opt.concept_type == '' then opt.concept_type = string.split(paths.basename(opt.train_label_file_h5, '.h5'), '_')[3] end
 if opt.model_id == '' then 
-    opt.model_id = string.format('%s_%s_mt%d_%s_b%d_bias%f_lr%f_wd%f_l%d', 
-            opt.concept_type, opt.model_type, opt.multitask_type, 
+    opt.model_id = string.format('%s_mt%d_%s_%s_b%d_bias%g_lr%g_wd%g_l%d', 
+            opt.concept_type, opt.multitask_type, opt.model_type, 
             opt.optim, opt.batch_size, opt.bias_init, 
             opt.learning_rate, opt.weight_decay, opt.reg_type)
 end
@@ -269,7 +269,10 @@ end
 
 -- Save model
 local function save_model()
-    local cp_path = path.join(opt.cp_path, 'model_' .. opt.model_id .. '_epoch' .. epoch  .. '.t7')
+    local dirname = paths.concat(opt.cp_path, opt.version)
+    if not paths.dirp(dirname) then paths.mkdir(dirname) end
+    
+    local cp_path = path.join(opt.cp_path, opt.version, 'model_' .. opt.model_id .. '_epoch' .. epoch  .. '.t7')
     local cp = {}
     cp.opt = opt
     cp.iter = iter
@@ -357,11 +360,9 @@ while true do
         print('new learning rate', optim_config.learningRate)
     end
     
-    if (iter % opt.save_cp_interval == 0) then save_model() end
-    
+    if iter % opt.save_cp_interval == 0 then save_model() end
+    if iter >= opt.max_iters or epoch > opt.max_epochs then break end
     if iter % opt.iter_per_epoch == 0 then epoch = epoch + 1 end
-    
-    if iter >= opt.max_iters or epoch >= opt.max_epochs then break end
 end    
 
 

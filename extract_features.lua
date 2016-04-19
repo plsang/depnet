@@ -23,6 +23,7 @@ cmd:option('-batch_size', 1, 'Number of image per batch')
 cmd:option('-back_end', 'cudnn')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_dir', 'cp', 'checkpoint directory')
+cmd:option('-output_dir', 'data/Microsoft_COCO', 'path to coco data root')
 cmd:option('-loss_weight', 20, 'loss multiplier, to display loss as a bigger value, and to scale backward gradient')
 cmd:option('-phase', 'test', 'phase (train/test)')
 cmd:option('-log_mode', 'console', 'console/file.  filename is the testing model file + .log')
@@ -49,7 +50,7 @@ if opt.log_mode == 'file' then
 end
 
 if opt.output_file == '' then
-    local dirname = paths.concat(opt.cp_dir, opt.version)
+    local dirname = paths.concat(opt.output_dir, opt.version)
     if not paths.dirp(dirname) then paths.mkdir(dirname) end
     local filename = paths.basename(opt.test_cp, 't7')
     opt.output_file = paths.concat(dirname, filename .. '_' .. opt.layer .. '.h5')
