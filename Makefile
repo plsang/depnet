@@ -1,11 +1,14 @@
 CLCV_ROOT = /net/per920a/export/das14a/satoh-lab/plsang
 CLCV_CORPORA_ROOT = $(CLCV_ROOT)/corpora
 DATA_ROOT = ./data
+LOG_ROOT = ./log
 
 MSCOCO_SYM = Microsoft_COCO
 MSCOCO_ROOT = $(CLCV_CORPORA_ROOT)/$(MSCOCO_SYM)
 MSCOCO_DATA_ROOT = $(DATA_ROOT)/$(MSCOCO_SYM)
 
+TYPE?=myconceptsv3
+NDIM?=1000
 VER?=v1.9
 GID?=0
 WD?=0
@@ -34,15 +37,40 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_%_preprocessedimages_msmil.h5: $(MSCOCO_ROOT)/ann
 		--images_size 565 \
 		2>&1 | tee log/prepo/mscoco2014_$*_preprocessedimages_msmil.txt
 
-prepo_med:
-	python preprocess_video.py --pool 16
 
-prepo_med_vgg:
-	python preprocess_video.py --output_dir /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg --img_size 224 --pool 12
+### CONCEPT MODEL
 
-
+vgg-$(TYPE)-train: 
+	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
+		-train_label_file_h5 mscoco2014_train_$(TYPE).h5 \
+		-val_label_file_h5 mscoco2014_val_$(TYPE).h5 \
+		-train_image_file_h5 data/Microsoft_COCO/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+                -cnn_proto /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers_deploy.prototxt \
+                -cnn_model /net/per920a/export/das14a/satoh-lab/plsang/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+		-batch_size $(BS) -optim $(OP) -num_target $(NDIM) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-vocab_file mscoco2014_train_$(TYPE)vocab.json -model_type vgg \
+        	-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		2>&1 | tee log/$(VER)/train_vgg_$(TYPE)_$(OP)_b$(BS)_wd$(WD)_bias$(BIAS)_lr$(LR).log
+        
+vgg-$(TYPE)-test:
+	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+            -model_type vgg -num_target $(NDIM) -print_log_interval 1000 -batch_size 32 \
+            -test_cp cp/$(VER)/model_$(TYPE)_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP).t7 -version $(VER)
+	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-val_label_file_h5 mscoco2014_val_$(TYPE).h5 -model_type vgg -test_mode file \
+            -test_cp data/Microsoft_COCO/$(VER)/model_$(TYPE)_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP)_fc8.h5 \
+            -version $(VER)
+            
+vgg-$(TYPE)-med:            
+	CUDA_VISIBLE_DEVICES=$(GID) th extract_features_med.lua -log_mode console \
+			-video_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-batch_size 32 -model_type vgg -num_target $(NDIM) -layer $(LAYER) -version $(VER) \
+           	 	-test_cp cp/$(VER)/model_$(TYPE)_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP).t7
+                
 ### DEPENDENCY MODEL
-
 
 vgg-mydepsv4-train: 
 	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root /net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO \
@@ -96,13 +124,13 @@ vgg-multitask-test:
 	CUDA_VISIBLE_DEVICES=$(GID) th test_multitask.lua -log_mode file \
 			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
 			-model_type vgg -test_mode file -version $(VER) \
-            -test_cp cp/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP)_fc8.h5
+            -test_cp data/Microsoft_COCO/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP)_fc8.h5
         
 vgg-multitask-med:
 	CUDA_VISIBLE_DEVICES=$(GID) th extract_features_med.lua -log_mode console \
-			-data_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
+			-video_root /net/per610a/export/das11f/plsang/trecvidmed/preprocessed-vgg \
 			-batch_size 32 -model_type vgg -num_target 22034 -layer $(LAYER) -version $(VER) \
-            -test_cp cp/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP)_fc8.h5
+            -test_cp cp/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP).t7
 
 ### TEST DETECT CONCEPTS
 
