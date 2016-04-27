@@ -25,7 +25,7 @@ BS?=1
 OP?=adam
 EP?=1
 
-### PRE-PROCESSING
+###### PRE-PROCESSING
 
 prepo_vgg: $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5
 $(MSCOCO_DATA_ROOT)/mscoco2014_%_preprocessedimages_vgg.h5: $(MSCOCO_ROOT)/annotations/captions_%2014.json
@@ -73,8 +73,8 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_%
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
 		-batch_size $(BS) -optim $(OP) -num_target $(NDIM) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
 		-vocab_file mscoco2014_train_$*vocab.json -model_type vgg \
-		-cp_path $(MODEL_ROOT)/vgg-$* -model_id vgg-$* \
-		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -max_iters 100 -save_cp_interval 100 \
+		-cp_path $(MODEL_ROOT)/vgg-$* -model_id vgg-$* -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
 		2>&1 | tee $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).log
         
 vgg-extract-fc8: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc8.h5, $(MODEL_SET)) \
@@ -114,7 +114,7 @@ vgg-%-test:
             -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
             -version $(VER)
             
-### MSMIL MODEL
+###### MSMIL MODEL
 
 msmil-train-models: msmil-myconceptsv3-model msmil-mydepsv4-model msmil-mypasv4-model msmil-mypasprepv4-model
 msmil-test-models: msmil-myconceptsv3-test msmil-mydepsv4-test msmil-mypasv4-test msmil-mypasprepv4-test
@@ -132,7 +132,7 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_%
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
 		-batch_size $(BS) -optim $(OP) -num_target $(NDIM) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
 		-vocab_file mscoco2014_train_$*vocab.json -model_type milmaxnor -cp_path $(MODEL_ROOT)/vgg-$* -model_id msmil-$*\
-		-learning_rate $(LR) -weight_decay $(WD) -bias_init -6.58 -version $(VER) -max_iters 100 -save_cp_interval 100 \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init -6.58 -version $(VER) -max_epochs $(EP) \
 		2>&1 | tee $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).log
         
 msmil-extract-fc8: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_train_msmil-%fc8.h5, $(MODEL_SET)) \
@@ -171,3 +171,43 @@ msmil-%-test:
 			-val_label_file_h5 mscoco2014_val_$*.h5 -model_type milmaxnor -test_mode file \
             -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
             -version $(VER)
+            
+
+###### MULTITASK MODEL
+
+vgg-multitask-train:
+	mkdir -p $(MODEL_ROOT)/vgg-multitask/$(VER)
+	CUDA_VISIBLE_DEVICES=$(GID) th train_multitask.lua \
+		-coco_data_root $(MSCOCO_DATA_ROOT) \
+		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt \
+		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 \
+		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-test_interval 1000 -num_test_image 400 -max_epochs $(EP) \
+		-print_log_interval 10 -model_type vgg -multitask_type 1 \
+		-batch_size $(BS) -optim $(OP) -bias_init -6.58 -weight_decay $(WD) -version $(VER) -learning_rate $(LR) \
+		2>&1 | tee $(MODEL_ROOT)/vgg-multitask/$(VER)/model_vgg-multitask_epoch$(EP).log
+
+msmil-multitask-train:
+	mkdir -p $(MODEL_ROOT)/vgg-multitask/$(VER)
+	CUDA_VISIBLE_DEVICES=$(GID) th train_multitask.lua \
+		-coco_data_root $(MSCOCO_DATA_ROOT) \
+		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt \
+		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+		-train_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_msmil.h5 \
+		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-test_interval 1000 -num_test_image 400 -max_epochs $(EP) \
+		-print_log_interval 10 -model_type milmaxnor -multitask_type 1 \
+		-batch_size $(BS) -optim $(OP) -bias_init -6.58 -weight_decay $(WD) -version $(VER) -learning_rate $(LR) \
+		2>&1 | tee $(MODEL_ROOT)/msmil-multitask/$(VER)/model_msmil-multitask_epoch$(EP).log
+        
+vgg-multitask-test:
+	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
+			-image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+            -model_type vgg -num_target 22034 -print_log_interval 1000 -batch_size 32 \
+            -test_cp cp/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP).t7 -version $(VER)
+	CUDA_VISIBLE_DEVICES=$(GID) th test_multitask.lua -log_mode file \
+			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
+			-model_type vgg -test_mode file -version $(VER) \
+            -test_cp data/Microsoft_COCO/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP)_fc8.h5
+            
