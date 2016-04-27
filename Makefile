@@ -54,10 +54,15 @@ $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel:
           http://dl.caffe.berkeleyvision.org/caffe_ilsvrc12.tar.gz
 	cd $(MODEL_ROOT)/pretrained-models/vgg-imagenet; tar -xzf caffe_ilsvrc12.tar.gz; rm caffe_ilsvrc12.tar.gz 
     
-### VGG MODELS
 
-vgg-train-model: $(patsubst %,$(MODEL_ROOT)/vgg-%/$(VER)/model_vgg-%_epoch$(EP).t7,$(MODEL_SET))
-$(MODEL_ROOT)/vgg-%/$(VER)/model_vgg-%_epoch$(EP).t7: $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5
+###### VGG MODELS
+
+vgg-train-models: vgg-myconceptsv3-model vgg-mydepsv4-model vgg-mypasv4-model vgg-mypasprepv4-model
+vgg-test-models: vgg-myconceptsv3-test vgg-mydepsv4-test vgg-mypasv4-test vgg-mypasprepv4-test
+
+vgg-%-model: $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \    $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 \
+$(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
+$(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5
 	mkdir -p $(MODEL_ROOT)/vgg-$*/$(VER)
 	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
 		-train_label_file_h5 mscoco2014_train_$*.h5 \
@@ -67,8 +72,9 @@ $(MODEL_ROOT)/vgg-%/$(VER)/model_vgg-%_epoch$(EP).t7: $(MODEL_ROOT)/pretrained-m
 		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt  \
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
 		-batch_size $(BS) -optim $(OP) -num_target $(NDIM) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
-		-vocab_file mscoco2014_train_$*vocab.json -model_type vgg -model_id vgg-$* \
-		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		-vocab_file mscoco2014_train_$*vocab.json -model_type vgg \
+		-cp_path $(MODEL_ROOT)/vgg-$* -model_id vgg-$* \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -max_iters 100 -save_cp_interval 100 \
 		2>&1 | tee $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).log
         
 vgg-extract-fc8: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc8.h5, $(MODEL_SET)) \
@@ -77,41 +83,45 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc8.h5:
 	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
 			-image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 \
             -model_type vgg -print_log_interval 1000 -num_target $(NDIM) -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-%_epoch$(EP).t7 \
+            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
             -layer fc8 -output_file $@
 $(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc8.h5:
 	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
 			-image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
             -model_type vgg -print_log_interval 1000 -num_target $(NDIM) -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-%_epoch$(EP).t7 \
+            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
             -layer fc8 -output_file $@
             
-vgg-extract-fc7: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc7.h5, $(VGG_MODELS)) \
-    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc7.h5,$(VGG_MODELS))
+vgg-extract-fc7: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc7.h5, $(MODEL_SET)) \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc7.h5,$(MODEL_SET))
 $(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc7.h5:
 	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
 			-image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 \
             -model_type vgg -print_log_interval 1000 -num_target $(NDIM) -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-%_epoch$(EP).t7 \
+            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
             -layer fc7 -output_file $@
 $(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc8.h5:
 	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
 			-image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
             -model_type vgg -print_log_interval 1000 -num_target $(NDIM) -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-%_epoch$(EP).t7 \
+            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
             -layer fc7 -output_file $@
             
 vgg-%-test:            
 	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file \
 			-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
 			-val_label_file_h5 mscoco2014_val_$*.h5 -model_type vgg -test_mode file \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-%_epoch$(EP).t7 \
+            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
             -version $(VER)
             
 ### MSMIL MODEL
 
-msmil-train-model: $(patsubst %,$(MODEL_ROOT)/msmil-%/$(VER)/model_msmil-%_epoch$(EP).t7, $(MODEL_SET))
-$(MODEL_ROOT)/msmil-%/$(VER)/model_msmil-%_epoch$(EP).t7: $(MODEL_ROOT)/pretrained-models/msmil-imagenet/VGG_ILSVRC_16_layers.caffemodel $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_msmil.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5
+msmil-train-models: msmil-myconceptsv3-model msmil-mydepsv4-model msmil-mypasv4-model msmil-mypasprepv4-model
+msmil-test-models: msmil-myconceptsv3-test msmil-mydepsv4-test msmil-mypasv4-test msmil-mypasprepv4-test
+
+msmil-%-model: $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \ $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_msmil.h5 \
+$(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
+$(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5
 	mkdir -p $(MODEL_ROOT)/msmil-$*/$(VER)
 	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
 		-train_label_file_h5 mscoco2014_train_$*.h5 \
@@ -121,8 +131,8 @@ $(MODEL_ROOT)/msmil-%/$(VER)/model_msmil-%_epoch$(EP).t7: $(MODEL_ROOT)/pretrain
 		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt  \
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
 		-batch_size $(BS) -optim $(OP) -num_target $(NDIM) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
-		-vocab_file mscoco2014_train_$*vocab.json -model_type milmaxnor -model_id msmil-$*\
-		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		-vocab_file mscoco2014_train_$*vocab.json -model_type milmaxnor -cp_path $(MODEL_ROOT)/vgg-$* -model_id msmil-$*\
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init -6.58 -version $(VER) -max_iters 100 -save_cp_interval 100 \
 		2>&1 | tee $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).log
         
 msmil-extract-fc8: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_train_msmil-%fc8.h5, $(MODEL_SET)) \
@@ -154,8 +164,8 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-%fc8.h5:
             -model_type milmaxnor -print_log_interval 1000 -num_target $(NDIM) -batch_size $(BS) -version $(VER) \
             -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
             -layer fc7 -output_file $@
-            
-msmil-%-test:            
+
+msmil-%-test:
 	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file \
 			-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
 			-val_label_file_h5 mscoco2014_val_$*.h5 -model_type milmaxnor -test_mode file \
