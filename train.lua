@@ -7,7 +7,6 @@ require 'cudnn'
 local cjson = require 'cjson'
 
 require 'CocoData'
---require 'MultilabelCrossEntropyCriterion'
 require 'nn.MultiLabelCrossEntropyCriterion'
 require 'eval_utils'
 

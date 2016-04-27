@@ -3,7 +3,6 @@ require 'cunn' -- otherwise, error: attempt to index field 'THNN' (a nil value)
 require 'cudnn'
 require 'loadcaffe'
 require 'nn.SpatialMIL'
-require 'MILLayer'
 
 local model_utils = {}
 
