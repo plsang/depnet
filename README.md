@@ -41,4 +41,61 @@
   git clone https://github.com/plsang/cunn.git torch-cunn
   cd torch-cunn; luarocks make rocks/cunn-scm-1.rockspec
   ```
-2. 
+2. Preprocessing
+  * Update CLCV_ROOT=/path/to/the/clcv/`resources`/directory
+  * Preprocessing:
+  ```
+  make prepo_vgg     # preprocessing images for training vgg models
+  make prepo_msmil   # preprocessing images for training msmil models
+  make vgg16-model   # download the standard VGG16 net
+  ```
+3. Training models
+  * Training Options
+    * GID: specify the GPU device ID (default: 0)
+    * VER: version name (e.g., v1), each models will be saved in a subdirectory specified by this version
+    * WD: weight decay, recommend to set it to zero when using ADAM learning method
+    * LR: learning rate
+    * BS: batch size (number of images per batch) reduce this number if memory is not enough
+    * OP: Optimization method (choices=sgd,adam) 
+    * EP: number of training epochs (default = 1)
+  * VGG models
+  ```
+  make vgg-train-models   
+  ```
+  This command will train all the model names (myconceptsv3, mydepsv4, mypasv4, mypasprepv4) sequentially. 
+  We can also train each model separately:
+  
+  ```
+  make vgg-myconceptsv3-model 
+  make vgg-mydepsv4-model 
+  make vgg-mypasv4-model 
+  make vgg-mypasprepv4-model
+  ```
+  * MSMIL models
+  ```
+  make msmil-train-models OP=adam WD=0  # sgd does not work well for MSMIL models
+  ```
+  * Multitask models
+4. Extracting features
+  * VGG models
+  ```
+  make vgg-extract-fc8
+  make vgg-extract-fc7
+  ```
+  * MSMIL models
+  ```
+  make msmil-extract-fc8
+  ```
+  * Multitask models
+5. Testing the models
+  
+  After extracting features from the fc8 layer, we can test the performance of the model on the COCO val set.
+ 
+  * VGG models
+  ```
+  make vgg-test-models
+  ```
+  * MSMIL models
+  ```
+  make msmil-test-models
+  ```
