@@ -42,7 +42,8 @@
   cd torch-cunn; luarocks make rocks/cunn-scm-1.rockspec
   ```
 2. Preprocessing
-  * Update CLCV_ROOT=/path/to/the/clcv/`resources`/directory
+  * Check out the clcv branch
+  * Update CLCV_ROOT=/path/to/the/clcv/`resources`/directory in the Makefile
   * Preprocessing:
   ```
   make prepo_vgg     # preprocessing images for training vgg models
