@@ -7,7 +7,6 @@ require 'cudnn'
 require "logging.console"
 
 require 'CocoData'
-require 'MultilabelCrossEntropyCriterion'
 require 'eval_utils'
 local model_utils = require 'model_utils'
     

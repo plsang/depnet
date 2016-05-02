@@ -77,7 +77,7 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_%
 		2>&1 | tee $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).log
         
 vgg-extract-fc8: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc8.h5, $(MODEL_SET)) \
-    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc8.h5,$(VGG_MODELS))
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc8.h5,$(MODEL_SET))
 $(MSCOCO_DATA_ROOT)/mscoco2014_train_vgg-%fc8.h5:
 	NDIM=$$(python -c "import json; v=json.load(open('$(MSCOCO_DATA_ROOT)/mscoco2014_train_$*vocab.json')); print len(v)") && \
 	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
@@ -109,11 +109,10 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc7.h5:
             -layer fc7 -output_file $@
             
 vgg-%-test:            
-	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file \
-			-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
-			-val_label_file_h5 mscoco2014_val_$*.h5 -model_type vgg -test_mode file \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
-            -version $(VER)
+	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -log_dir $(MODEL_ROOT)/vgg-$* \
+		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-val_label_file_h5 mscoco2014_val_$*.h5 -model_type vgg -test_mode file \
+            	-test_cp $(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-$*fc8.h5 -version $(VER)
             
 ###### MSMIL MODEL
 
@@ -169,11 +168,10 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-%fc7.h5:
             -layer fc7 -output_file $@
 
 msmil-%-test:
-	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file \
-			-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
-			-val_label_file_h5 mscoco2014_val_$*.h5 -model_type milmaxnor -test_mode file \
-            -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
-            -version $(VER)
+	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -log_dir $(MODEL_ROOT)/msmil-$* \
+		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-val_label_file_h5 mscoco2014_val_$*.h5 -model_type milmaxnor -test_mode file \
+            	-test_cp $(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-$*fc8.h5 -version $(VER)
             
 
 ###### MULTITASK MODEL
