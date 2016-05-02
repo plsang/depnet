@@ -16,8 +16,8 @@ MODEL_SET = myconceptsv3 mydepsv4 mypasv4 mypasprepv4
 ### DEFAULT PARAMETERS
 
 NDIM?=1000
-VER?=v2
-GID?=7
+VER?=v1
+GID?=1
 WD?=0.0005
 LR?=0.00001
 BIAS?=-6.58
