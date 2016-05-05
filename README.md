@@ -41,4 +41,4 @@
   git clone https://github.com/plsang/cunn.git torch-cunn
   cd torch-cunn; luarocks make rocks/cunn-scm-1.rockspec
   ```
-2. 
+2. More on [clcv branch](https://github.com/mynlp/depnet/tree/clcv)
