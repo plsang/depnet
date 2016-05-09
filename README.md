@@ -41,6 +41,8 @@
   git clone https://github.com/plsang/cunn.git torch-cunn
   cd torch-cunn; luarocks make rocks/cunn-scm-1.rockspec
   ```
+  * The required packages can be installed using the `install_deps.sh` script.
+  
 2. Preprocessing
   * Check out the clcv branch
   * Update CLCV_ROOT=/path/to/the/clcv/`resources`/directory in the Makefile
