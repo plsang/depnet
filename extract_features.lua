@@ -72,6 +72,18 @@ logger:info('Model type: ' .. opt.model_type)
 logger:info('Loading model: ' .. opt.test_cp)
 
 local model = model_utils.load_model(opt):cuda()
+
+-- for k,v in pairs(model.modules[2]) do print (k, v) end
+-- print(model.modules[2].modules[25].name)
+
+if opt.model_type == 'vgg' and opt.layer == 'fc7' then
+    model['modules'][2]:remove()  -- remove sigmoid
+    model['modules'][2]:remove()  -- remove fc8
+    model['modules'][2]:remove()  -- remove drop7
+    print(model['modules'])
+    opt.num_target = 4096
+end
+
 if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
     model:remove()  -- remove MIL
     model['modules'][2]:remove()  -- remove sigmoid
@@ -79,6 +91,24 @@ if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
     model:add(nn.SpatialMIL('milmax'):cuda()) 
     print(model['modules'])
     opt.num_target = 4096
+end
+
+if opt.model_type == 'milmaxnor' and opt.layer == 'responsemapfc8' then
+    model:remove()  -- remove MIL
+    model['modules'][2]:remove()  -- remove sigmoid
+    model:add(nn.View(-1):setNumInputDims(3):cuda()) -- 1x1x1000 --> 1000
+    model:get(#model).name = 'torch_view'
+    opt.num_target = 12*12*opt.num_target
+end
+
+if opt.model_type == 'milmaxnor' and opt.layer == 'responsemapfc7' then
+    model:remove()  -- remove MIL
+    model['modules'][2]:remove()  -- remove sigmoid
+    model['modules'][2]:remove()  -- remove fc8
+    model['modules'][2]:remove()  -- remove drop7
+    model:add(nn.View(-1):setNumInputDims(3):cuda()) -- 1x1x1000 --> 1000
+    model:get(#model).name = 'torch_view'
+    opt.num_target = 12*12*4096
 end
 
 model:evaluate() 
@@ -94,6 +124,7 @@ local num_iters = torch.ceil(opt.num_test_image/opt.batch_size)
 for iter=1, num_iters do
     local batch = loader:getBatch() -- get image and label batches
     local outputs = model:forward(batch.images:cuda())
+    
     local start_idx = (iter-1)*opt.batch_size + 1
     local end_idx = iter*opt.batch_size
     if end_idx > opt.num_test_image then

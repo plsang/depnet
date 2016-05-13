@@ -170,6 +170,25 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-%fc7.h5:
             -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
             -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
             -layer fc7 -output_file $@
+msmil-extract-myconceptsv3responsemapfc8: $(MSCOCO_DATA_ROOT)/mscoco2014_train_msmil-myconceptsv3responsemapfc8.h5 \
+	$(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-myconceptsv3responsemapfc8.h5
+$(MSCOCO_DATA_ROOT)/mscoco2014_%_msmil-myconceptsv3responsemapfc8.h5:
+	NDIM=$$(python -c "import json; v=json.load(open('$(MSCOCO_DATA_ROOT)/mscoco2014_train_myconceptsv3vocab.json')); print len(v)") && \
+	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
+			-image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_$*_preprocessedimages_msmil.h5 \
+            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
+            -test_cp $(MODEL_ROOT)/msmil-myconceptsv3/$(VER)/model_msmil-myconceptsv3_epoch$(EP).t7 \
+            -layer responsemapfc8 -output_file $@
+
+msmil-extract-myconceptsv3responsemapfc7: $(MSCOCO_DATA_ROOT)/mscoco2014_train_msmil-myconceptsv3responsemapfc7.h5 \
+	$(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-myconceptsv3responsemapfc7.h5
+$(MSCOCO_DATA_ROOT)/mscoco2014_%_msmil-myconceptsv3responsemapfc7.h5:
+	NDIM=$$(python -c "import json; v=json.load(open('$(MSCOCO_DATA_ROOT)/mscoco2014_train_myconceptsv3vocab.json')); print len(v)") && \
+	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
+			-image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_$*_preprocessedimages_msmil.h5 \
+            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
+            -test_cp $(MODEL_ROOT)/msmil-myconceptsv3/$(VER)/model_msmil-myconceptsv3_epoch$(EP).t7 \
+            -layer responsemapfc7 -output_file $@
 
 msmil-%-test: $(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-%fc8.h5
 	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -log_dir $(MODEL_ROOT)/msmil-$* \
