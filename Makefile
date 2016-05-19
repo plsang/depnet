@@ -115,8 +115,10 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc7.h5:
             -layer fc7 -output_file $@
             
 vgg-%-test: $(MSCOCO_DATA_ROOT)/mscoco2014_val_vgg-%fc8.h5
-	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -log_dir $(MODEL_ROOT)/vgg-$* \
-		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
+	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -coco_data_root $(MSCOCO_DATA_ROOT) \
+		-log_dir $(MODEL_ROOT)/vgg-$* \
+		-val_image_file_h5 mscoco2014_val_preprocessedimages_vgg.h5 \
+		-val_index_json mscoco2014_val_preprocessedimages_vgg.json \
 		-val_label_file_h5 mscoco2014_val_$*.h5 -model_type vgg -test_mode file \
             	-test_cp $^ -version $(VER)
             

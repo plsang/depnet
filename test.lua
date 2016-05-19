@@ -17,6 +17,7 @@ cmd:text('Options')
 -- Data input settings
 cmd:option('-coco_data_root', '/net/per610a/export/das11f/plsang/codes/clcv/resources/data/Microsoft_COCO', 'path to coco data root')
 cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed image data')
+cmd:option('-val_index_json', 'coco_val.json', 'path to the index json file')
 cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
 cmd:option('-num_test_image', -1, 'Number of test image, -1 for testing all (40504)')
@@ -52,7 +53,9 @@ end
 
 if opt.debug == 1 then dbg = require 'debugger' end
 
-local loader = CocoData{image_file_h5 = opt.val_image_file_h5, 
+local loader = CocoData{
+    image_file_h5 = paths.concat(opt.coco_data_root, opt.val_image_file_h5),
+    index_json = paths.concat(opt.coco_data_root, opt.val_index_json), 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.val_label_file_h5),
     num_target = opt.num_target, 
     batch_size = opt.batch_size}
