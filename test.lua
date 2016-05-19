@@ -93,8 +93,6 @@ for iter=1, num_iters do
     if opt.test_mode == 'model' then
         outputs = model:forward(data.images:cuda())
     else
-        local index = output_loader:read('/index'):partial({idx, idx+opt.batch_size-1})
-        assert(torch.all(torch.eq(index, data.image_ids)), 'error: image ids are not matched!!!')
         outputs = output_loader:read('/data'):partial({idx, idx+opt.batch_size-1}, {1, opt.num_target})
         
         idx = idx+opt.batch_size    

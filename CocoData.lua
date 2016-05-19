@@ -3,6 +3,7 @@ Class to load COCO data in batch mode
 ]]--
 
 require 'hdf5'
+local cjson = require 'cjson'
 
 local CocoData = torch.class('CocoData')
 
@@ -45,6 +46,14 @@ function CocoData:__init(opt)
         self.num_target = opt.num_target
     end
     
+    if opt.index_json then
+        -- load input json
+        print('Loading input json that contains index', opt.index_json)
+        local fh = io.open(opt.index_json, 'r')
+        local json_data = fh:read()
+        fh:close()
+        self.indexes = cjson.decode(json_data)
+    end
     --
     self.batch_size = opt.batch_size
     
@@ -66,14 +75,11 @@ end
 function CocoData:getBatch(label_only)
     local image_batch = label_only or torch.FloatTensor(self.batch_size, self.num_channels, self.image_size, self.image_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
-    local image_ids = torch.LongTensor(self.batch_size)
+    
     local idx = self.iterator
     
     for i=1, self.batch_size do
         -- check if image indexes are matched
-        local img_id1 = self.image_data:read('/index'):partial({idx, idx})
-        
-        image_ids[i] = img_id1
         
         if not label_only then
             -- fetch the image from h5
@@ -82,9 +88,11 @@ function CocoData:getBatch(label_only)
         end
         
         if self.has_label then
+            local img_id1 = tonumber(self.indexes[idx])
+            assert(img_id1, 'currently depnet is supported for training on MS COCO dataset only')
             local shuffle_idx = self.image_shuffle[idx] + 1
             local img_id2 = self.label_data:read('/index'):partial({shuffle_idx, shuffle_idx})
-            assert(torch.all(torch.eq(img_id1, img_id2)), 'image id not matched!!!')
+            assert(img_id1 == img_id2[1], 'image ids not matched!!!')
             
             -- fetch label from h5 (FROM SHUFFLED INDEX)
             local label_idx = torch.ByteTensor(1, self.num_target):zero() -- by default, torch does not initialize tensor
@@ -105,7 +113,6 @@ function CocoData:getBatch(label_only)
     local data = {}
     data.images = image_batch
     data.labels = label_batch
-    data.image_ids = image_ids
     return data
 end
 

@@ -59,7 +59,7 @@ def load_image(params):
     img_size = params['images_size']
     f = h5py.File(params['output_h5'], 'w')
     images = f.create_dataset('images', (num_images, 3, img_size, img_size), dtype='int16')
-    indexes = f.create_dataset('index', (num_images,), dtype='int')
+    indexes = []
     f.create_dataset('index_shuffle', (num_images,), dtype='int', data=index_shuffle)
     
     for i, shuffled_i in enumerate(index_shuffle):
@@ -93,11 +93,15 @@ def load_image(params):
         im_rsz = np.transpose(im_rsz, axes = (2, 0, 1))
         
         images[i] = im_rsz
-        indexes[i] = img_id
+        indexes.append(str(img_id))
         if i % 1000 == 0:
             logger.info('processing %d/%d (%.2f%% done)' % (i, num_images, i*100.0/num_images))
     
-    f.close()       
+    f.close()
+    logger.info('Wrote image data to %s', params['output_h5']) 
+    
+    json.dump(indexes, open(params['output_json'], 'w'))
+    logger.info('Wrote indexes to %s', params['output_json'])    
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s:%(levelname)s: %(message)s')
@@ -105,6 +109,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--input_json', required=True, help='COCO json file e.g., captions_val2014.json ')
     parser.add_argument('--output_h5', required=True, help='Output h5 file')
+    parser.add_argument('--output_json', required=True, help='Output JSON file to store index')
     parser.add_argument('--images_root', default='', help='Location of COCO image directory')
     parser.add_argument('--images_size', default=224, type=int, help='Location of COCO image directory')
     parser.add_argument('--seed', default=123, type=int, help='Random seed')
@@ -115,5 +120,4 @@ if __name__ == "__main__":
     
     start = datetime.now()
     load_image(params)
-    logger.info('Wrote to %s', params['output_h5'])    
     logger.info('Time: %s', datetime.now() - start)

@@ -31,6 +31,7 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_%_preprocessedimages_vgg.h5: $(MSCOCO_ROOT)/annot
 	mkdir -p $(LOG_ROOT)/prepo
 	python preprocess_image.py --input_json $^ \
 		--output_h5 $@ \
+		--output_json $(MSCOCO_DATA_ROOT)/mscoco2014_$*_preprocessedimages_vgg.json \
 		--images_root $(MSCOCO_ROOT)/images/$*2014 \
 		--images_size 224 \
 		2>&1 | tee $(LOG_ROOT)/prepo/mscoco2014_$*_preprocessedimages_vgg.txt
@@ -40,6 +41,7 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_%_preprocessedimages_msmil.h5: $(MSCOCO_ROOT)/ann
 	mkdir -p $(LOG_ROOT)/prepo
 	python preprocess_image.py --input_json $^ \
 		--output_h5 $@ \
+		--output_json $(MSCOCO_DATA_ROOT)/mscoco2014_$*_preprocessedimages_msmil.json \
 		--images_root $(MSCOCO_ROOT)/images/$*2014 \
 		--images_size 565 \
 		2>&1 | tee $(LOG_ROOT)/prepo/mscoco2014_$*_preprocessedimages_msmil.txt
@@ -66,8 +68,10 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_%
 	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
 		-train_label_file_h5 mscoco2014_train_$*.h5 \
 		-val_label_file_h5 mscoco2014_val_$*.h5 \
-		-train_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 \
-		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-train_image_file_h5 mscoco2014_train_preprocessedimages_vgg.h5 \
+		-train_index_json mscoco2014_train_preprocessedimages_vgg.json \
+		-val_image_file_h5 mscoco2014_val_preprocessedimages_vgg.h5 \
+		-val_index_json mscoco2014_val_preprocessedimages_vgg.json \
 		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt  \
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
 		-batch_size $(BS) -optim $(OP) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
@@ -128,8 +132,10 @@ $(MSCOCO_DATA_ROOT)/mscoco2014_train_%.h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_%
 	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
 		-train_label_file_h5 mscoco2014_train_$*.h5 \
 		-val_label_file_h5 mscoco2014_val_$*.h5 \
-		-train_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_msmil.h5 \
-		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-train_image_file_h5 mscoco2014_train_preprocessedimages_msmil.h5 \
+		-train_index_json mscoco2014_train_preprocessedimages_msmil.json \
+		-val_image_file_h5 mscoco2014_val_preprocessedimages_msmil.h5 \
+		-val_index_json mscoco2014_val_preprocessedimages_msmil.json \
 		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt  \
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
 		-batch_size $(BS) -optim $(OP) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \

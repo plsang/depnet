@@ -19,8 +19,10 @@ cmd:text('Options')
 
 -- Data input settings
 cmd:option('-coco_data_root', '/home/ec2-user/data/Microsoft_COCO', 'path to coco data root')
-cmd:option('-train_image_file_h5', 'data/coco_train.h5', 'path to the prepressed image data')
-cmd:option('-val_image_file_h5', 'data/coco_val.h5', 'path to the prepressed image data')
+cmd:option('-train_image_file_h5', 'coco_train.h5', 'path to the prepressed image data')
+cmd:option('-train_index_json', 'coco_train.json', 'path to the index json file')
+cmd:option('-val_image_file_h5', 'coco_val.h5', 'path to the prepressed image data')
+cmd:option('-val_index_json', 'coco_val.json', 'path to the index json file')
 cmd:option('-train_label_file_h5', 'mscoco2014_train_myconceptsv3.h5', 'file name of the prepressed train label data')
 cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of the prepressed val label data')
 cmd:option('-vocab_file', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
@@ -76,13 +78,17 @@ if opt.debug == 1 then dbg = require 'debugger' end
 torch.manualSeed(opt.seed)
 
 -- loading Coco data
-local train_loader = CocoData{image_file_h5 = opt.train_image_file_h5, 
+local train_loader = CocoData{
+    image_file_h5 = paths.concat(opt.coco_data_root, opt.train_image_file_h5), 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.train_label_file_h5), 
+    index_json = paths.concat(opt.coco_data_root, opt.train_index_json), 
     num_target = opt.num_target, 
     batch_size = opt.batch_size}
 
-local val_loader = CocoData{image_file_h5 = opt.val_image_file_h5, 
+local val_loader = CocoData{
+    image_file_h5 = paths.concat(opt.coco_data_root, opt.val_image_file_h5), 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.val_label_file_h5),
+    index_json = paths.concat(opt.coco_data_root, opt.val_index_json), 
     num_target = opt.num_target, 
     batch_size = opt.batch_size}
 

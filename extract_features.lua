@@ -131,7 +131,6 @@ for iter=1, num_iters do
         end_idx = opt.num_test_image
     end
     
-    index[{{start_idx, end_idx}}] = batch.image_ids[{{1,end_idx-start_idx+1}}]:long() -- copy cpu ==> gpu 
     data[{{start_idx, end_idx},{}}] = outputs[{{1,end_idx-start_idx+1},{}}]:float()   -- copy cpu ==> gpu 
     
     if iter % opt.print_log_interval == 0 then 
@@ -140,8 +139,6 @@ for iter=1, num_iters do
     end
 end    
 
-logger:info('Writing indices...')
-myFile:write('/index', index, options)
 logger:info('Writing data...')
 myFile:write('/data', data, options)
 myFile:close()
