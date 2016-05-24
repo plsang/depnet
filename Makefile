@@ -206,28 +206,41 @@ msmil-%-test: $(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-%fc8.h5
             
 
 ###### MULTITASK MODEL
-
+### myconceptsv3 + mydepsv4
 vgg-multitask-train:
 	mkdir -p $(MODEL_ROOT)/vgg-multitask/$(VER)
 	CUDA_VISIBLE_DEVICES=$(GID) th train_multitask.lua \
 		-coco_data_root $(MSCOCO_DATA_ROOT) \
 		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt \
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
-		-train_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_vgg.h5 \
-		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_vgg.h5 \
+		-train_image_file_h5 mscoco2014_dev1_image_depnet_preprocessedimages_vgg.h5 \
+		-train_index_json mscoco2014_dev1_image_depnet_preprocessedimages_vgg.json \
+		-val_image_file_h5 mscoco2014_dev2_image_depnet_preprocessedimages_vgg.h5 \
+		-val_index_json mscoco2014_dev2_image_depnet_preprocessedimages_vgg.json \
+		-train_label_file_h5_task1 mscoco2014_dev1_captions_myconceptsv3.h5 \
+		-val_label_file_h5_task1 mscoco2014_dev2_captions_myconceptsv3.h5 \
+		-train_label_file_h5_task2 mscoco2014_dev1_captions_mydepsv4.h5 \
+		-val_label_file_h5_task2 mscoco2014_dev2_captions_mydepsv4.h5 \
 		-test_interval 1000 -num_test_image 400 -max_epochs $(EP) \
 		-print_log_interval 10 -model_type vgg -multitask_type 1 \
 		-batch_size $(BS) -optim $(OP) -bias_init $(BIAS) -weight_decay $(WD) -version $(VER) -learning_rate $(LR) \
 		2>&1 | tee $(MODEL_ROOT)/vgg-multitask/$(VER)/model_vgg-multitask_epoch$(EP).log
 
+### myconceptsv3 + mydepsv4
 msmil-multitask-train:
 	mkdir -p $(MODEL_ROOT)/msmil-multitask/$(VER)
 	CUDA_VISIBLE_DEVICES=$(GID) th train_multitask.lua \
 		-coco_data_root $(MSCOCO_DATA_ROOT) \
 		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt \
 		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
-		-train_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_train_preprocessedimages_msmil.h5 \
-		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
+		-train_image_file_h5 mscoco2014_dev1_image_depnet_preprocessedimages_msmil.h5 \
+		-train_index_json mscoco2014_dev1_image_depnet_preprocessedimages_msmil.json \
+		-val_image_file_h5 mscoco2014_dev2_image_depnet_preprocessedimages_msmil.h5 \
+		-val_index_json mscoco2014_dev2_image_depnet_preprocessedimages_msmil.json \
+		-train_label_file_h5_task1 mscoco2014_dev1_captions_myconceptsv3.h5 \
+		-val_label_file_h5_task1 mscoco2014_dev2_captions_myconceptsv3.h5 \
+		-train_label_file_h5_task2 mscoco2014_dev1_captions_mydepsv4.h5 \
+		-val_label_file_h5_task2 mscoco2014_dev2_captions_mydepsv4.h5 \
 		-test_interval 1000 -num_test_image 400 -max_epochs $(EP) \
 		-print_log_interval 10 -model_type milmaxnor -multitask_type 1 \
 		-batch_size $(BS) -optim $(OP) -bias_init $(BIAS) -weight_decay $(WD) -version $(VER) -learning_rate $(LR) \
