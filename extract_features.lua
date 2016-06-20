@@ -1,5 +1,6 @@
 --[[
-Class to train
+Class extract features
+TODO: Extract features from multi layer within a single forward pass. Do not remove layers!
 ]]--
 
 require 'nn'
@@ -30,10 +31,11 @@ cmd:option('-log_mode', 'console', 'console/file.  filename is the testing model
 cmd:option('-log_dir', 'log', 'log dir')
 cmd:option('-version', 'v2.0', 'release version')    
 cmd:option('-debug', 0, '1 to turn debug on')    
-cmd:option('-print_log_interval', 1000, 'Number of test image.')
+cmd:option('-print_log_interval', 100, 'Number of test image.')
 cmd:option('-model_type', 'milmaxnor', 'vgg, vggbn, milmax, milnor, milmaxnor')
 cmd:option('-layer', 'fc8', 'fc8, fc7')
 cmd:option('-output_file', '', 'path to output file')
+cmd:option('-top_concepts', -1, 'top concepts to be visualized')
 
 cmd:text()
 local opt = cmd:parse(arg)
@@ -64,6 +66,9 @@ local loader = CocoData{image_file_h5 = opt.image_file_h5,
 
 if opt.num_test_image == -1 then opt.num_test_image = loader:getNumImages() end
 if opt.num_target == -1 then opt.num_target = loader:getNumTargets() end
+if opt.top_concepts == -1 then opt.top_concepts = opt.num_target end
+assert(opt.top_concepts <= opt.num_target)
+
 print(opt)
 
 logger:info('Number of testing images: ' .. opt.num_test_image)
@@ -72,6 +77,7 @@ logger:info('Model type: ' .. opt.model_type)
 logger:info('Loading model: ' .. opt.test_cp)
 
 local model = model_utils.load_model(opt):cuda()
+local num_output_dim = opt.num_target
 
 -- for k,v in pairs(model.modules[2]) do print (k, v) end
 -- print(model.modules[2].modules[25].name)
@@ -81,7 +87,7 @@ if opt.model_type == 'vgg' and opt.layer == 'fc7' then
     model['modules'][2]:remove()  -- remove fc8
     model['modules'][2]:remove()  -- remove drop7
     print(model['modules'])
-    opt.num_target = 4096
+    num_output_dim = 4096
 end
 
 if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
@@ -90,17 +96,30 @@ if opt.model_type == 'milmaxnor' and opt.layer == 'fc7' then
     model['modules'][2]:remove()  -- remove fc8
     model:add(nn.SpatialMIL('milmax'):cuda()) 
     print(model['modules'])
-    opt.num_target = 4096
+    num_output_dim = 4096
 end
 
 if opt.model_type == 'milmaxnor' and opt.layer == 'responsemapfc8' then
-    model:remove()  -- remove MIL
-    model['modules'][2]:remove()  -- remove sigmoid
-    model:add(nn.View(-1):setNumInputDims(3):cuda()) -- 1x1x1000 --> 1000
-    model:get(#model).name = 'torch_view'
-    opt.num_target = 12*12*opt.num_target
+    if opt.top_concepts == opt.num_target then
+        model:remove()  -- remove MIL
+        model['modules'][2]:remove()  -- remove sigmoid
+        model:add(nn.View(-1):setNumInputDims(3):cuda()) -- 1x1x1000 --> 1000
+        model:get(#model).name = 'torch_view'
+        num_output_dim = 12*12*opt.num_target
+    else
+        -- new implementation for extracting repsonsemapfc8 for top concepts.
+        -- this implemntation does not modify the network because the final prob outputs will be used
+        -- to select top concepts at repsonsemapfc8
+        -- TODO: use this implementation for extracting other features, and at multiple layers at the same time
+        -- Currently, torch-hdf5 does not support partial writting, so current implemention is also fine.
+        
+        -- first top_concepts will be indices of these concepts, followed by the feature maps of these concepts
+        num_output_dim = opt.top_concepts + 12*12*opt.top_concepts
+    end
 end
 
+-- removed responsemapfc7 because it is not used
+--[[
 if opt.model_type == 'milmaxnor' and opt.layer == 'responsemapfc7' then
     model:remove()  -- remove MIL
     model['modules'][2]:remove()  -- remove sigmoid
@@ -108,14 +127,15 @@ if opt.model_type == 'milmaxnor' and opt.layer == 'responsemapfc7' then
     model['modules'][2]:remove()  -- remove drop7
     model:add(nn.View(-1):setNumInputDims(3):cuda()) -- 1x1x1000 --> 1000
     model:get(#model).name = 'torch_view'
-    opt.num_target = 12*12*4096
+    num_output_dim = 12*12*4096
 end
-
+--]]
+    
 model:evaluate() 
 
 local myFile = hdf5.open(opt.output_file, 'w')
 local index = torch.LongTensor(opt.num_test_image):zero()
-local data = torch.FloatTensor(opt.num_test_image, opt.num_target):zero()
+local data = torch.FloatTensor(opt.num_test_image, num_output_dim):zero()
 
 local timer = torch.Timer()
 
@@ -124,6 +144,16 @@ local num_iters = torch.ceil(opt.num_test_image/opt.batch_size)
 for iter=1, num_iters do
     local batch = loader:getBatch() -- get image and label batches
     local outputs = model:forward(batch.images:cuda())
+    
+    if opt.model_type == 'milmaxnor' and opt.layer == 'responsemapfc8' and opt.top_concepts < opt.num_target then
+        -- outputs should be from the prob layer, select top 
+        local sorted_outputs, sorted_indices = torch.topk(outputs, opt.top_concepts, 2, true, true)
+        local expanded_indices = sorted_indices:reshape(opt.batch_size, opt.top_concepts, 1, 1):repeatTensor(1, 1, 12, 12)
+        
+        -- the repsonsemaps output is located at model.modules[2].modules[29].output
+        local top_outputs = model.modules[2].modules[29].output:gather(2, expanded_indices):view(opt.batch_size, -1)
+        outputs = sorted_indices:cat(top_outputs, 2)
+    end
     
     local start_idx = (iter-1)*opt.batch_size + 1
     local end_idx = iter*opt.batch_size
@@ -134,7 +164,7 @@ for iter=1, num_iters do
     data[{{start_idx, end_idx},{}}] = outputs[{{1,end_idx-start_idx+1},{}}]:float()   -- copy cpu ==> gpu 
     
     if iter % opt.print_log_interval == 0 then 
-        logger:info(string.format('iter %d passed', iter))
+        logger:info(string.format('iter %d/%d passed', iter, num_iters))
         collectgarbage() 
     end
 end    
