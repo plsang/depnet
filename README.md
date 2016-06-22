@@ -54,11 +54,13 @@
   * Check out the clcv branch
   * Update CLCV_ROOT=/path/to/the/clcv/`resources`/directory in the Makefile
   * Preprocessing:
+  
   ```
   make prepo_vgg     # preprocessing images for training vgg models
   make prepo_msmil   # preprocessing images for training msmil models
   make vgg16-model   # download the standard VGG16 net
   ```
+
 ## Training models
   * Training Options
     * GID: [0] specify the GPU device ID (default: 0)
