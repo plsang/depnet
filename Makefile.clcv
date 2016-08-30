@@ -1,0 +1,489 @@
+CLCV_ROOT = ../clcv/resources
+CLCV_CORPORA_ROOT = $(CLCV_ROOT)/corpora
+CLCV_DATA_ROOT = $(CLCV_ROOT)/data
+CLCV_TOOLS_ROOT = $(CLCV_ROOT)/tools
+LOG_ROOT = ./log
+
+# corpora/data/tools directories
+MSCOCO_SYM = Microsoft_COCO
+MSCOCO_ROOT = $(CLCV_CORPORA_ROOT)/$(MSCOCO_SYM)
+MSCOCO_DATA_ROOT = $(CLCV_DATA_ROOT)/$(MSCOCO_SYM)
+
+DAQUAR_SYM = DAQUAR
+DAQUAR_ROOT = $(CLCV_CORPORA_ROOT)/$(DAQUAR_SYM)
+DAQUAR_DATA_ROOT = $(CLCV_DATA_ROOT)/$(DAQUAR_SYM)
+
+MODEL_ROOT = $(CLCV_DATA_ROOT)/cv_models
+SHARED_ROOT = /mnt/data
+
+DEPNET_ROOT = ../depnet
+
+MSCOCO_SETS = train val dev1 dev2 #test
+DAQUAR_SETS = train test dev1 dev2
+MODEL_SET = myconceptsv3 mydepsv4 mypasv4 mypasprepv4
+MULTITASK_MODEL_SET = myconceptsv3mydepsv4 myconceptsv3mypasv4 myconceptsv3mypasprepv4
+RESMAP_SYM =responsemap
+
+ATTACH_VOCAB_PY = ./attachvocab2h5.py
+ATTACH_IDS_PY = ./attachIDs2h5.py
+
+### DEFAULT PARAMETERS
+
+NDIM?=1000
+VER?=v1
+GID?=0
+WD?=0.0005
+LR?=0.00001
+BIAS?=-6.58
+BS?=4
+OP?=sgd
+EP?=1
+
+MODEL_ID = depnet-dev
+
+# function to compute set/model/val name from filename
+setnameof = $(word 2,$(subst _, ,$(basename $(notdir $(1)))))
+modeltypeof = $(word 2,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $(1)))))))
+valtypeof = $(word 3,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $(1)))))))
+dataprefixof = $(word 1,$(subst _, ,$(basename $(notdir $(1)))))
+
+##### TARGETS
+
+all: prepo_vgg prepo_msmil
+
+extract-vgg: $(patsubst %,extract-vgg-%,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+extract-msmil: $(patsubst %,extract-msmil-%,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+extract-resmap: $(patsubst %,extract-resmap-%,$(MODEL_SET))
+
+###### PRE-PROCESSING
+
+prepo_vgg: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_vgg.h5,$(MSCOCO_SETS)) \
+           $(patsubst %,$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_vgg.h5,$(DAQUAR_SETS))
+
+$(MSCOCO_DATA_ROOT)/mscoco2014_dev%_image_depnet_preprocessedimages_vgg.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSCOCO_DATA_ROOT)/mscoco2014_dev%_image_depnet_preprocessedimages_vgg.h5: \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(MSCOCO_ROOT)/images/train2014 \
+		--images_size 224 \
+		2>&1 | tee $(LOG_ROOT)/prepo/mscoco2014_dev$*_image_depnet_preprocessedimages_vgg.txt
+$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_vgg.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_vgg.h5: \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(MSCOCO_ROOT)/images/$*2014 \
+		--images_size 224 \
+		2>&1 | tee $(LOG_ROOT)/prepo/mscoco2014_$*_image_depnet_preprocessedimages_vgg.txt
+$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_vgg.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_vgg.h5: \
+    $(DAQUAR_DATA_ROOT)/daquar_%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(DAQUAR_ROOT)/nyu_depth_images \
+		--images_size 224 \
+		2>&1 | tee $(LOG_ROOT)/prepo/daquar_$*_image_depnet_preprocessedimages_vgg.txt
+
+
+prepo_msmil: $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_msmil.h5,$(MSCOCO_SETS)) \
+             $(patsubst %,$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_msmil.h5,$(DAQUAR_SETS))
+
+$(MSCOCO_DATA_ROOT)/mscoco2014_dev%_image_depnet_preprocessedimages_msmil.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSCOCO_DATA_ROOT)/mscoco2014_dev%_image_depnet_preprocessedimages_msmil.h5: \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(MSCOCO_ROOT)/images/train2014 \
+		--images_size 565 \
+		2>&1 | tee $(LOG_ROOT)/prepo/mscoco2014_$*_image_depnet_preprocessedimages_msmil.txt
+$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_msmil.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_msmil.h5: \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(MSCOCO_ROOT)/images/$*2014 \
+		--images_size 565 \
+		2>&1 | tee $(LOG_ROOT)/prepo/mscoco2014_$*_image_depnet_preprocessedimages_msmil.txt
+$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_msmil.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_msmil.h5: \
+    $(DAQUAR_DATA_ROOT)/daquar_%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(DAQUAR_ROOT)/nyu_depth_images \
+		--images_size 565 \
+		2>&1 | tee $(LOG_ROOT)/prepo/daquar_$*_image_depnet_preprocessedimages_msmil.txt
+
+
+vgg16-model: $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel
+$(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel:
+	mkdir -p $(MODEL_ROOT)/pretrained-models/vgg-imagenet
+	wget -P $(MODEL_ROOT)/pretrained-models/vgg-imagenet \
+          http://www.robots.ox.ac.uk/~vgg/software/very_deep/caffe/VGG_ILSVRC_16_layers.caffemodel \
+          https://gist.githubusercontent.com/ksimonyan/211839e770f7b538e2d8/raw/0067c9b32f60362c74f4c445a080beed06b07eb3/VGG_ILSVRC_16_layers_deploy.prototxt \
+          http://dl.caffe.berkeleyvision.org/caffe_ilsvrc12.tar.gz
+	cd $(MODEL_ROOT)/pretrained-models/vgg-imagenet; tar -xzf caffe_ilsvrc12.tar.gz; rm caffe_ilsvrc12.tar.gz 
+
+
+###### VGG MODELS
+
+vgg-train-models: $(patsubst %,vgg-%-model,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+vgg-test-models: $(patsubst %,vgg-%-test,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+
+
+###### model training
+
+VGG_MODEL_PATTERN = $(MODEL_ROOT)/depnet-vgg-%/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7
+VGG_VOCAB_PATTERN = $(MODEL_ROOT)/depnet-vgg-%/$(VER)/$(MODEL_ID)_vocab.json
+vgg-myconceptsv3-model: $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3)
+vgg-mydepsv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),mydepsv4)
+vgg-mypasv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),mypasv4)
+vgg-mypasprepv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),mypasprepv4)
+
+$(VGG_MODEL_PATTERN) $(VGG_VOCAB_PATTERN): \
+    $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_vgg.h5,dev1 dev2) \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_vgg.json,dev1 dev2) \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev2_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%vocab.json
+	mkdir -p $(MODEL_ROOT)/depnet-vgg-$*/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/train.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
+		-train_label_file_h5 mscoco2014_dev1_captions_$*.h5 \
+		-val_label_file_h5 mscoco2014_dev2_captions_$*.h5 \
+		-train_image_file_h5 $(notdir $(word 2,$^)) \
+		-val_image_file_h5 $(notdir $(word 3,$^)) \
+		-train_index_json $(notdir $(word 4,$^)) \
+		-val_index_json $(notdir $(word 5,$^)) \
+		-cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
+		-batch_size $(BS) -optim $(OP) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-vocab_file mscoco2014_dev1_captions_$*vocab.json -model_type vgg \
+		-cp_path $(MODEL_ROOT)/depnet-vgg-$* -model_id $(MODEL_ID) -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		2>&1 | tee $(MODEL_ROOT)/depnet-vgg-$*/$(VER)/model_$(MODEL_ID)_epoch$(EP).log
+	cp $(word 8,$^) $(patsubst %,$(VGG_VOCAB_PATTERN),$*)
+
+
+
+###### feature extracting
+
+VGG_LAYERS = fc8 fc7
+VGG_SUFFIXES = $(patsubst %,-%.h5,$(VGG_LAYERS))
+vggfilesof = $(foreach suffix,$(VGG_SUFFIXES),$(addsuffix $(suffix),$(patsubst %,$(2)_%_image_depnet-vgg-$(1),$(3))))
+extract-vgg-myconceptsv3: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3) \
+    $(call vggfilesof,myconceptsv3,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call vggfilesof,myconceptsv3,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-mydepsv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),mydepsv4) \
+    $(call vggfilesof,mydepsv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call vggfilesof,mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-mypasv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),mypasv4) \
+    $(call vggfilesof,mypasv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call vggfilesof,mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-mypasprepv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),mypasprepv4) \
+    $(call vggfilesof,mypasprepv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call vggfilesof,mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-myconceptsv3mydepsv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3mydepsv4) \
+    $(call vggfilesof,myconceptsv3mydepsv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call vggfilesof,myconceptsv3mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-myconceptsv3mypasv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3mypasv4) \
+    $(call vggfilesof,myconceptsv3mypasv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call vggfilesof,myconceptsv3mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-myconceptsv3mypasprepv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3mypasprepv4) \
+    $(call vggfilesof,myconceptsv3mypasprepv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call vggfilesof,myconceptsv3mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+
+
+VGG_FEAT_FILES = $(foreach val,$(MODEL_SET),$(call vggfilesof,$(val),$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS))) \
+                 $(foreach val,$(MODEL_SET),$(call vggfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))) \
+		 $(foreach val,$(MULTITASK_MODEL_SET),$(call vggfilesof,$(val),$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS))) \
+                 $(foreach val,$(MULTITASK_MODEL_SET),$(call vggfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS)))
+
+.SECONDEXPANSION:
+$(VGG_FEAT_FILES): dataprefix = $(call dataprefixof,$@)
+$(VGG_FEAT_FILES): setname = $(call setnameof,$@)
+$(VGG_FEAT_FILES): modeltype = $(call modeltypeof,$@)
+$(VGG_FEAT_FILES): valtype = $(call valtypeof,$@)
+$(VGG_FEAT_FILES): layer = $(word 4,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $@))))))
+$(VGG_FEAT_FILES): %.h5: \
+    $$(dir $$@)$$(call dataprefixof,$$@)_$$(call setnameof,$$@)_image_depnet_preprocessedimages_vgg.h5 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/$(MODEL_ID)_vocab.json
+	NDIM=$$(python -c "import json; v=json.load(open('$(word 3,$^)')); print len(v)") && \
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/extract_features.lua -log_mode console \
+          -image_file_h5 $< \
+          -model_type $(modeltype) -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
+          -test_cp $(word 2,$^) \
+          -layer $(layer) -output_file $@
+	python $(ATTACH_VOCAB_PY) $(if $(subst fc8,,$(layer)),--internal,) $(word 3,$^) $@
+	python $(ATTACH_IDS_PY) $(patsubst %.h5,%.json,$<) $@
+
+###### model testing
+
+#vgg-myconceptsv3-test: $(patsubst %,$(MODEL_ROOT)/depnet-vgg-%/$(VER)/test_model_depnet_epoch$(EP).log,myconceptsv3)
+#$(MODEL_ROOT)/depnet-vgg-%/$(VER)/test_model_depnet_epoch$(EP).log: \
+    $(MODEL_ROOT)/depnet-vgg-%/$(VER)/model_depnet_epoch$(EP).t7 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev2_image_depnet_preprocessedimages_vgg.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev2_captions_%.h5
+#	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/test.lua -log_mode file -log_dir $(MODEL_ROOT)/depnet-vgg-$* \
+          -coco_data_root $(MSCOCO_DATA_ROOT) \
+          -val_image_file_h5 $(word 2,$^) \
+          -val_label_file_h5 mscoco2014_dev2_captions_$*.h5 -model_type vgg -test_mode file \
+          -test_cp $< \
+          -version $(VER)
+
+
+
+###### MSMIL MODEL
+
+msmil-train-models: $(patsubst %,msmil-%-model,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+msmil-test-models: $(patsubst %,msmil-%-test,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+
+
+###### model training
+
+MSMIL_MODEL_PATTERN = $(MODEL_ROOT)/depnet-msmil-%/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7
+MSMIL_VOCAB_PATTERN = $(MODEL_ROOT)/depnet-msmil-%/$(VER)/$(MODEL_ID)_vocab.json
+msmil-myconceptsv3-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3)
+msmil-mydepsv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),mydepsv4)
+msmil-mypasv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasv4)
+msmil-mypasprepv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasprepv4)
+
+$(MSMIL_MODEL_PATTERN) $(MSMIL_VOCAB_PATTERN): \
+    $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_msmil.h5,dev1 dev2) \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_msmil.json,dev1 dev2) \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev2_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%vocab.json
+	mkdir -p $(MODEL_ROOT)/depnet-msmil-$*/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/train.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
+		-train_label_file_h5 mscoco2014_dev1_captions_$*.h5 \
+		-val_label_file_h5 mscoco2014_dev2_captions_$*.h5 \
+		-train_image_file_h5 $(notdir $(word 2,$^)) \
+		-val_image_file_h5 $(notdir $(word 3,$^)) \
+		-train_index_json $(notdir $(word 4,$^)) \
+		-val_index_json $(notdir $(word 5,$^)) \
+		-cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
+		-batch_size $(BS) -optim $(OP) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+		-vocab_file mscoco2014_dev1_captions_$*vocab.json -model_type milmaxnor \
+                -cp_path $(MODEL_ROOT)/depnet-msmil-$* -model_id $(MODEL_ID) -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		2>&1 | tee $(MODEL_ROOT)/depnet-msmil-$*/$(VER)/model_$(MODEL_ID)_epoch$(EP).log
+	cp $(word 8,$^) $(patsubst %,$(MSMIL_VOCAB_PATTERN),$*)
+
+
+
+###### feature extracting
+
+MSMIL_LAYERS = fc8 fc7
+MSMIL_SUFFIXES = $(patsubst %,-%.h5,$(MSMIL_LAYERS))
+msmilfilesof = $(foreach suffix,$(MSMIL_SUFFIXES),$(addsuffix $(suffix),$(patsubst %,$(2)_%_image_depnet-msmil-$(1),$(3))))
+extract-msmil-myconceptsv3: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3) \
+    $(call msmilfilesof,myconceptsv3,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call msmilfilesof,myconceptsv3,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-mydepsv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mydepsv4) \
+    $(call msmilfilesof,mydepsv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call msmilfilesof,mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-mypasv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasv4) \
+    $(call msmilfilesof,mypasv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call msmilfilesof,mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-mypasprepv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasprepv4) \
+    $(call msmilfilesof,mypasprepv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call msmilfilesof,mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-myconceptsv3mydepsv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3mydepsv4) \
+    $(call msmilfilesof,myconceptsv3mydepsv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call msmilfilesof,myconceptsv3mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-myconceptsv3mypasv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3mypasv4) \
+    $(call msmilfilesof,myconceptsv3mypasv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call msmilfilesof,myconceptsv3mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-myconceptsv3mypasprepv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3mypasprepv4) \
+    $(call msmilfilesof,myconceptsv3mypasprepv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call msmilfilesof,myconceptsv3mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+
+MSMIL_FEAT_FILES = \
+    $(foreach val,$(MODEL_SET),$(call msmilfilesof,$(val),$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS))) \
+    $(foreach val,$(MODEL_SET),$(call msmilfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))) \
+    $(foreach val,$(MULTITASK_MODEL_SET),$(call msmilfilesof,$(val),$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS))) \
+    $(foreach val,$(MULTITASK_MODEL_SET),$(call msmilfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS)))
+
+$(MSMIL_FEAT_FILES): dataprefix = $(call dataprefixof,$@)
+$(MSMIL_FEAT_FILES): setname = $(call setnameof,$@)
+$(MSMIL_FEAT_FILES): modeltype = $(call modeltypeof,$@)
+$(MSMIL_FEAT_FILES): valtype = $(call valtypeof,$@)
+$(MSMIL_FEAT_FILES): layer = $(word 4,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $@))))))
+$(MSMIL_FEAT_FILES): %.h5: \
+    $$(dir $$@)$$(call dataprefixof,$$@)_$$(call setnameof,$$@)_image_depnet_preprocessedimages_msmil.h5 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/$(MODEL_ID)_vocab.json
+	NDIM=$$(python -c "import json; v=json.load(open('$(word 3,$^)')); print len(v)") && \
+          LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/extract_features.lua -log_mode console \
+	  -image_file_h5 $< \
+          -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
+          -test_cp $(word 2,$^) \
+          -layer $(layer) -output_file $@
+	python $(ATTACH_VOCAB_PY) $(if $(subst fc8,,$(layer)),--internal,) $(word 3,$^) $@
+	python $(ATTACH_IDS_PY) $(patsubst %.h5,%.json,$<) $@
+
+
+###### responsemap extracting
+
+RESMAP_SUFFIXES = $(patsubst %,-%.h5,$(MSMIL_LAYERS))
+resmapfilesof = $(foreach suffix,$(MSMIL_SUFFIXES),$(addsuffix $(suffix),$(patsubst %,$(2)_%_image_depnet-msmil-$(1)$(RESMAP_SYM),$(3))))
+extract-resmap-myconceptsv3: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3) \
+    $(call resmapfilesof,myconceptsv3,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call resmapfilesof,myconceptsv3,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-resmap-mydepsv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mydepsv4) \
+    $(call resmapfilesof,mydepsv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call resmapfilesof,mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-resmap-mypasv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasv4) \
+    $(call resmapfilesof,mypasv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call resmapfilesof,mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-resmap-mypasprepv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasprepv4) \
+    $(call resmapfilesof,mypasprepv4,$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)) \
+    $(call resmapfilesof,mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+
+
+RESMAP_FEAT_FILES = \
+    $(foreach val,$(MODEL_SET),$(call resmapfilesof,$(val),$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS))) \
+    $(foreach val,$(MODEL_SET),$(call resmapfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS)))
+#MSCOCO_RESMAP_FEAT_FILES = $(foreach val,$(MODEL_SET),$(call resmapfilesof,$(val),$(MSCOCO_DATA_ROOT)/mscoco2014,$(MSCOCO_SETS)))
+#DAQUAR_RESMAP_FEAT_FILES = $(foreach val,$(MODEL_SET),$(call resmapfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS)))
+
+resmap_valtypeof = $(patsubst %$(RESMAP_SYM),%,$(call valtypeof,$(1)))
+$(RESMAP_FEAT_FILES): dataprefix = $(call dataprefixof,$@)
+$(RESMAP_FEAT_FILES): setname = $(call setnameof,$@)
+$(RESMAP_FEAT_FILES): modeltype = $(call modeltypeof,$@)
+$(RESMAP_FEAT_FILES): valtype = $(call resmap_valtypeof,$@)
+$(RESMAP_FEAT_FILES): layer = $(word 4,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $@))))))
+$(RESMAP_FEAT_FILES): %.h5:\
+    $$(dir $$@)$$(call dataprefixof,$$@)_$$(call setnameof,$$@)_image_depnet_preprocessedimages_msmil.h5 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call resmap_valtypeof,$$@)/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call resmap_valtypeof,$$@)/$(VER)/$(MODEL_ID)_vocab.json
+	NDIM=$$(python -c "import json; v=json.load(open('$(word 3,$^'))); print len(v)") && \
+	  LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/extract_features.lua -log_mode console \
+          -image_file_h5 $< \
+          -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
+          -test_cp $(word 2,$^) \
+          -layer $(RESMAP_SYM)$(layer) -output_file $@ -debug 1 -top_concepts 20
+	python $(ATTACH_VOCAB_PY) $(if $(subst fc8,,$(layer)),--internal,) $(word 3,$^) $@
+	python $(ATTACH_IDS_PY) $(patsubst %.h5,%.json,$<) $@
+
+
+##### NOT TESTED YET
+###### model testing
+
+# msmil-%-test: $(MSCOCO_DATA_ROOT)/mscoco2014_val_msmil-%fc8.h5
+# 	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -log_dir $(MODEL_ROOT)/msmil-$* \
+# 		-val_image_file_h5 $(MSCOCO_DATA_ROOT)/mscoco2014_val_preprocessedimages_msmil.h5 \
+# 		-val_label_file_h5 mscoco2014_val_$*.h5 -model_type milmaxnor -test_mode file \
+# 	-test_cp $^ -version $(VER)
+
+
+###### MULTITASK MODEL
+
+VGGMT_MODEL_PATTERN = $(MODEL_ROOT)/depnet-vgg-myconceptsv3%/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7
+VGGMT_VOCAB_PATTERN = $(MODEL_ROOT)/depnet-vgg-myconceptsv3%/$(VER)/$(MODEL_ID)_vocab.json
+vgg-myconceptsv3mydepsv4-model: $(patsubst %,$(VGGMT_MODEL_PATTERN),mydepsv4)
+vgg-myconceptsv3mypasv4-model: $(patsubst %,$(VGGMT_MODEL_PATTERN),mypasv4)
+vgg-myconceptsv3mypasprepv4-model: $(patsubst %,$(VGGMT_MODEL_PATTERN),mypasprepv4)
+
+$(VGGMT_MODEL_PATTERN) $(VGGMT_VOCAB_PATTERN): \
+    $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_vgg.h5,dev1 dev2) \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_vgg.json,dev1 dev2) \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev2_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_myconceptsv3vocab.json \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%vocab.json
+	mkdir -p $(MODEL_ROOT)/depnet-vgg-myconceptsv3$*/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/train_multitask.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
+		-train_label_file_h5_task1 mscoco2014_dev1_captions_myconceptsv3.h5 \
+		-val_label_file_h5_task1 mscoco2014_dev2_captions_myconceptsv3.h5 \
+		-train_label_file_h5_task2 mscoco2014_dev1_captions_$*.h5 \
+		-val_label_file_h5_task2 mscoco2014_dev2_captions_$*.h5 \
+		-vocab_file_task1 mscoco2014_dev1_captions_myconceptsv3vocab.json \
+		-vocab_file_task2 mscoco2014_dev1_captions_$*vocab.json \
+		-train_image_file_h5 $(notdir $(word 2,$^)) \
+		-val_image_file_h5 $(notdir $(word 3,$^)) \
+		-train_index_json $(notdir $(word 4,$^)) \
+		-val_index_json $(notdir $(word 5,$^)) \
+		-cnn_proto $(dir $<)VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
+		-batch_size $(BS) -optim $(OP) \
+		-model_type vgg -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+                -cp_path $(MODEL_ROOT)/depnet-vgg-myconceptsv3$* -model_id $(MODEL_ID) -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		2>&1 | tee $(MODEL_ROOT)/depnet-vgg-myconceptsv3$*/$(VER)/model_$(MODEL_ID)_epoch$(EP).log
+	python concat_vocab.py $(word 8,$^) $(word 9,$^) $(patsubst %,$(VGGMT_VOCAB_PATTERN),$*)
+
+MSMILMT_MODEL_PATTERN = $(MODEL_ROOT)/depnet-msmil-myconceptsv3%/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7
+MSMILMT_VOCAB_PATTERN = $(MODEL_ROOT)/depnet-msmil-myconceptsv3%/$(VER)/$(MODEL_ID)_vocab.json
+msmil-myconceptsv3mydepsv4-model: $(patsubst %,$(MSMILMT_MODEL_PATTERN),mydepsv4)
+msmil-myconceptsv3mypasv4-model: $(patsubst %,$(MSMILMT_MODEL_PATTERN),mypasv4)
+msmil-myconceptsv3mypasprepv4-model: $(patsubst %,$(MSMILMT_MODEL_PATTERN),mypasprepv4)
+
+$(MSMILMT_MODEL_PATTERN) $(MSMILMT_VOCAB_PATTERN): \
+    $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_msmil.h5,dev1 dev2) \
+    $(patsubst %,$(MSCOCO_DATA_ROOT)/mscoco2014_%_image_depnet_preprocessedimages_msmil.json,dev1 dev2) \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev2_captions_%.h5 \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_myconceptsv3vocab.json \
+    $(MSCOCO_DATA_ROOT)/mscoco2014_dev1_captions_%vocab.json
+	mkdir -p $(MODEL_ROOT)/depnet-msmil-myconceptsv3$*/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/train_multitask.lua -coco_data_root $(MSCOCO_DATA_ROOT) \
+		-train_label_file_h5_task1 mscoco2014_dev1_captions_myconceptsv3.h5 \
+		-val_label_file_h5_task1 mscoco2014_dev2_captions_myconceptsv3.h5 \
+		-train_label_file_h5_task2 mscoco2014_dev1_captions_$*.h5 \
+		-val_label_file_h5_task2 mscoco2014_dev2_captions_$*.h5 \
+		-vocab_file_task1 mscoco2014_dev1_captions_myconceptsv3vocab.json \
+		-vocab_file_task2 mscoco2014_dev1_captions_$*vocab.json \
+		-train_image_file_h5 $(notdir $(word 2,$^)) \
+		-val_image_file_h5 $(notdir $(word 3,$^)) \
+		-train_index_json $(notdir $(word 4,$^)) \
+		-val_index_json $(notdir $(word 5,$^)) \
+		-cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
+		-batch_size $(BS) -optim $(OP) \
+		-model_type milmaxnor -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
+                -cp_path $(MODEL_ROOT)/depnet-msmil-myconceptsv3$* -model_id $(MODEL_ID) -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		2>&1 | tee $(MODEL_ROOT)/depnet-msmil-myconceptsv3$*/$(VER)/model_$(MODEL_ID)_epoch$(EP).log
+	python concat_vocab.py $(word 8,$^) $(word 9,$^) $(patsubst %,$(MSMILMT_VOCAB_PATTERN),$*)
+

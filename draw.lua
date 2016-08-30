@@ -38,6 +38,7 @@ cmd:option('-version', 'v2.0', 'release version')
 cmd:option('-debug', 0, '1 to turn debug on')    
 cmd:option('-print_log_interval', 10000, 'Number of test image.')
 cmd:option('-model_type', 'vgg', 'vgg, milmaxnor')
+cmd:option('-img_id', 0, 'Id of the image to be visualized. 0: all')
 cmd:option('-test_mode', 'model', 'model/file: test from a model or from a predicted file')
 cmd:option('-concept_idx', 1, 'Index of the concept to visualize')
 cmd:option('-vocab_file', 'mscoco2014_train_captions_mydepsv4vocab.json', 'saving a copy of the vocabulary that was used for training')
@@ -79,7 +80,9 @@ model:evaluate()
 
 local function draw(matrix, output_file)
     gnuplot.pngfigure(output_file)
-    gnuplot.imagesc(torch.sin(matrix),'color')
+    gnuplot.raw('unset xtics')
+    gnuplot.raw('unset ytics')
+    gnuplot.imagesc(matrix, 'color')
     gnuplot.plotflush()
 end
 
@@ -105,52 +108,55 @@ end
 for iter=1, num_iters do
     local data = loader:getBatch()
     
-    num_range = 10
+    num_range = 20
     range = torch.linspace(1, img_size, num_range+1)
     local img_id = loader:getIndex(iter)
 
     -- whole image to get index of max concept 
     local outputs = model:forward(data.images:cuda())
+    y, i = torch.sort(outputs, 2, true)
     
-    print('img_id, max concept', img_id, vocab[opt.concept_idx])
+    -- only visualize if the concept appear in the top 10 detected concepts
+    if i[{{1},{1,10}}]:eq(opt.concept_idx):sum() ~= 0 then
+        print('img_id, max concept', img_id, vocab[opt.concept_idx])
+        local nel = num_range*num_range
+        local img_data = torch.zeros(nel, 3, img_size, img_size)
 
-    local nel = num_range*num_range
-    local img_data = torch.zeros(nel, 3, img_size, img_size)
-    
-    for ii=1,num_range do
-        for jj=1,num_range do
-            ii_start = math.floor(range[ii])
-            ii_end = math.floor(range[ii+1])
-            jj_start = math.floor(range[jj])
-            jj_end = math.floor(range[jj+1])
-            local eind = (ii-1)*num_range + jj 
-            img_data[eind] = data.images:clone()
-            img_data[{{eind},{},{ii_start,ii_end},{jj_start,jj_end}}] = 0
+        for ii=1,num_range do
+            for jj=1,num_range do
+                ii_start = math.floor(range[ii])
+                ii_end = math.floor(range[ii+1])
+                jj_start = math.floor(range[jj])
+                jj_end = math.floor(range[jj+1])
+                local eind = (ii-1)*num_range + jj 
+                img_data[eind] = data.images:clone()
+                img_data[{{eind},{},{ii_start,ii_end},{jj_start,jj_end}}] = 0
+            end
         end
-    end
 
-    local outputs = torch.zeros(nel)
-    local nbatch = 16
-    local niters = torch.ceil(nel/nbatch)
-    
-    for niter = 1,niters do
-        local start_idx = (niter-1)*nbatch + 1
-        local end_idx = start_idx + nbatch - 1
-        if end_idx > nel then end_idx = nel end
-        local tmp_outputs = model:forward(img_data[{{start_idx,end_idx}}]:cuda())
-        outputs[{{start_idx,end_idx}}] = tmp_outputs[{{},{opt.concept_idx}}]:float()
-    end
-    local map = outputs:resize(num_range, num_range)
-    
-    img_name = 'COCO_val2014_' .. string.format("%012d", img_id) 
-    draw(map, 'data/map/' .. img_name .. '.png')
+        local outputs = torch.zeros(nel)
+        local nbatch = 16
+        local niters = torch.ceil(nel/nbatch)
 
-    src_file = '/net/per610a/export/das11f/plsang/coco2014/images/val2014/' .. img_name .. '.jpg'
-    os.execute('cp ' .. src_file .. ' ' .. 'data/src/' )    
-    
-    if iter % opt.print_log_interval == 0 then 
-        logger:info(string.format('iter %d: ', iter))
-        collectgarbage() 
+        for niter = 1,niters do
+            local start_idx = (niter-1)*nbatch + 1
+            local end_idx = start_idx + nbatch - 1
+            if end_idx > nel then end_idx = nel end
+            local tmp_outputs = model:forward(img_data[{{start_idx,end_idx}}]:cuda())
+            outputs[{{start_idx,end_idx}}] = tmp_outputs[{{},{opt.concept_idx}}]:float()
+        end
+        local map = outputs:resize(num_range, num_range)
+
+        img_name = 'COCO_val2014_' .. string.format("%012d", img_id) 
+        draw(map, 'data/map/' .. img_name .. '.png')
+
+        src_file = '/net/per610a/export/das11f/plsang/coco2014/images/val2014/' .. img_name .. '.jpg'
+        os.execute('cp ' .. src_file .. ' ' .. 'data/src/' )    
+
+        if iter % opt.print_log_interval == 0 then 
+            logger:info(string.format('iter %d: ', iter))
+            collectgarbage() 
+        end
     end
 end    
 

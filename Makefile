@@ -4,7 +4,7 @@ CLCV_DATA_ROOT = $(CLCV_ROOT)/data
 CLCV_TOOLS_ROOT = $(CLCV_ROOT)/tools
 LOG_ROOT = ./log
 
-MSCOCO_SYM = Microsoft_COCO
+MSCOCO_SYM = Microsoft_COCO_20160518
 MSCOCO_ROOT = $(CLCV_CORPORA_ROOT)/$(MSCOCO_SYM)
 MSCOCO_DATA_ROOT = $(CLCV_DATA_ROOT)/$(MSCOCO_SYM)
 MODEL_ROOT = $(CLCV_DATA_ROOT)/cv_models
@@ -17,11 +17,11 @@ MODEL_SET = myconceptsv3 mydepsv4 mypasv4 mypasprepv4
 
 VER?=v1
 GID?=0
-WD?=0.0005
+WD?=0
 LR?=0.00001
 BIAS?=-6.58
 BS?=4
-OP?=sgd
+OP?=adam
 EP?=1
 
 ###### PRE-PROCESSING

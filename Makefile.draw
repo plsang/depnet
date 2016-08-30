@@ -1,0 +1,22 @@
+CLCV_ROOT = ../clcv/resources
+CLCV_CORPORA_ROOT = $(CLCV_ROOT)/corpora
+CLCV_DATA_ROOT = $(CLCV_ROOT)/data
+CLCV_TOOLS_ROOT = $(CLCV_ROOT)/tools
+LOG_ROOT = ./log
+
+MSCOCO_SYM = Microsoft_COCO
+MSCOCO_ROOT = $(CLCV_CORPORA_ROOT)/$(MSCOCO_SYM)
+MSCOCO_DATA_ROOT = $(CLCV_DATA_ROOT)/$(MSCOCO_SYM)
+MODEL_ROOT = $(CLCV_DATA_ROOT)/cv_models
+
+GID?=7
+VER?=v1
+
+draw:
+	CUDA_VISIBLE_DEVICES=$(GID) th draw.lua -concept_idx 1 -debug 1 -img_id 18111 \
+		-test_cp $(MODEL_ROOT)/depnet-msmil-mydepsv4/v1/model_depnet-dev_epoch1.t7 \
+                -val_image_file_h5 mscoco2014_val_image_depnet_preprocessedimages_msmil.h5 \
+                -val_label_file_h5 mscoco2014_val_captions_mydepsv4.h5 -model_type milmaxnor -test_mode model \
+                -val_index_json mscoco2014_val_image_depnet_preprocessedimages_msmil.json -version $(VER) \
+		2>&1 | tee draw2.log
+
