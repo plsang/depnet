@@ -28,8 +28,8 @@ local vgg_transform_train = t.Compose{
 local vgg_transform_test = t.Compose{
     t.CenterCrop(224),
 }
-function preprocess_vgg(img, mode, image_type, num_img_channel)
-
+function preprocess_vgg(img, mode, num_img_channel)
+    
     if num_img_channel == 3 then
         -- convert RGB --> BGR
         img = img:index(1, perm):float()

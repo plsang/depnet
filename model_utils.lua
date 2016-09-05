@@ -45,7 +45,7 @@ function model_utils.build_conv_block(model, nInputDim, nOutputDim, kernel_size,
 end
 
 -- Build basic vgg net from conv blocks
-function model_utils.build_vgg_net(num_target, num_img_channel)
+function model_utils.build_vgg_net(opt)
     local main_model = nn.Sequential()
     -- group 1: frozen weight
     local model = nn.Sequential()
@@ -53,7 +53,7 @@ function model_utils.build_vgg_net(num_target, num_img_channel)
     -- learing rate & weight decay multipliers for this group
     model.frozen = true
     
-    model_utils.build_conv_block(model, num_img_channel, 64, 3, 1, 1, 'conv1_1', 'relu1_1')
+    model_utils.build_conv_block(model, opt.num_img_channel, 64, 3, 1, 1, 'conv1_1', 'relu1_1')
     model_utils.build_conv_block(model, 64, 64, 3, 1, 1, 'conv1_2', 'relu1_2')
     model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
     model:get(#model).name = 'pool1'
@@ -90,14 +90,14 @@ function model_utils.build_vgg_net(num_target, num_img_channel)
     model:get(#model).name = 'pool5'
     
     model_utils.build_conv_block(model, 512, 4096, 7, 1, 0, 'fc6', 'relu6')
-    model:add(nn.Dropout(0.500000))
+    model:add(nn.Dropout(opt.fc6_dropout))
     model:get(#model).name = 'drop6'
     
     model_utils.build_conv_block(model, 4096, 4096, 1, 1, 0, 'fc7', 'relu7')
-    model:add(nn.Dropout(0.500000))
+    model:add(nn.Dropout(opt.fc7_dropout))
     model:get(#model).name = 'drop7'
     
-    model:add(cudnn.SpatialConvolution(4096, num_target, 1, 1, 1, 1, 0, 0, 1)) -- Nx4096x12x12 --> Nx1000x12x12
+    model:add(cudnn.SpatialConvolution(4096, opt.num_target, 1, 1, 1, 1, 0, 0, 1)) -- Nx4096x12x12 --> Nx1000x12x12
     model:get(#model).name = 'fc8'
     
     model:add(nn.Sigmoid())
@@ -111,7 +111,7 @@ end
 
 -- to replace function finetune_vgg
 function model_utils.vgg_net(opt)
-    local model = model_utils.build_vgg_net(opt.num_target, opt.num_img_channel)
+    local model = model_utils.build_vgg_net(opt)
     model:add(nn.View(-1):setNumInputDims(3)) -- 1x1x1000 --> 1000
     model:get(#model).name = 'torch_view'
     return model
@@ -119,7 +119,7 @@ end
 
 -- to replace function mil_vgg
 function model_utils.mil_net(opt)
-    local model = model_utils.build_vgg_net(opt.num_target)
+    local model = model_utils.build_vgg_net(opt)
     -- model:add(nn.MILLayer(opt.mil_type))
     -- nn.SpatialMIL is C/CUDA version of MILLayer
     model:add(nn.SpatialMIL(opt.mil_type)) 

@@ -68,6 +68,8 @@ cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
 cmd:option('-weight_decay', 0, 'regularization multiplier')
 cmd:option('-version', 'v0.0', 'release version')    
 cmd:option('-num_img_channel', 3, 'number of input channels (3: spatial net, 20: temporal net)')
+cmd:option('-fc6_dropout', 0.5, 'Dropout ratio in the fully connected layers (use 0.9 for the temporal net)')
+cmd:option('-fc7_dropout', 0.5, 'Dropout ratio in the fully connected layers (use 0.9 for the temporal net)')
 --
 
 cmd:text()

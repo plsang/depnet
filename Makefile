@@ -199,13 +199,13 @@ $(VGG_MODEL_PATTERN) $(VGG_VOCAB_PATTERN): \
 		-val_label_file_h5 $(notdir $(word 7,$^)) \
 		-vocab_file $(notdir $(word 8,$^)) \
 		-model_type vgg -cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
-		-batch_size $(BS) -optim $(OP) -test_interval -1 -num_test_image -1 -print_log_interval 10 \
+		-batch_size $(BS) -optim $(OP) -test_interval -1 -num_test_image -1 -print_log_interval 10 -learning_rate_decay_interval 100 \
 		-cp_path $(MODEL_ROOT)/depnet-vgg-$* -model_id $(MODEL_ID) -max_epochs $(EP) \
-		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -debug 1 -num_img_channel 3 \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -debug 1 -num_img_channel 3 -fc6_dropout 0.9 -fc7_dropout 0.9 \
 		2>&1 | tee $(MODEL_ROOT)/depnet-vgg-$*/$(VER)/model_$(MODEL_ID).log
 	cp $(word 8,$^) $(patsubst %,$(VGG_VOCAB_PATTERN),$*)
-	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev1_captions_$*depnetfmt.h5 2> /dev/null 
-	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev2_captions_$*depnetfmt.h5 2> /dev/null
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_$*depnetfmt.h5 2> /dev/null 
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_val_captions_$*depnetfmt.h5 2> /dev/null
 
 
 VGG_TMODEL_PATTERN = $(MODEL_ROOT)/depnet-vgg-%/$(VER)/model_$(MODEL_ID)_t.t7
@@ -239,11 +239,11 @@ $(VGG_TMODEL_PATTERN) $(VGG_TVOCAB_PATTERN): \
                 -model_type vgg -cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
                 -batch_size $(BS) -optim $(OP) -test_interval -1 -num_test_image -1 -print_log_interval 10 \
                 -cp_path $(MODEL_ROOT)/depnet-vgg-$* -model_id $(MODEL_ID)_t -max_epochs $(EP) \
-                -learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -debug 1 -num_img_channel 20 \
+                -learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -debug 1 -num_img_channel 20 -fc6_dropout 0.9 -fc7_dropout 0.9 \
                 2>&1 | tee $(MODEL_ROOT)/depnet-vgg-$*/$(VER)/model_$(MODEL_ID).log
 	cp $(word 8,$^) $(patsubst %,$(VGG_VOCAB_PATTERN),$*)
-	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev1_captions_$*depnetfmt.h5 2> /dev/null
-	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev2_captions_$*depnetfmt.h5 2> /dev/null
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_$*depnetfmt.h5 2> /dev/null
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_val_captions_$*depnetfmt.h5 2> /dev/null
 
 ###### feature extracting
 
