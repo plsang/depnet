@@ -6,7 +6,7 @@ require 'nn'
 require 'cudnn'
 local cjson = require 'cjson'
 
-require 'CocoData'
+require 'VideoData'
 require 'nn.MultiLabelCrossEntropyCriterion'
 require 'eval_utils'
 
@@ -28,8 +28,8 @@ cmd:option('-val_label_file_h5', 'mscoco2014_val_myconceptsv3.h5', 'file name of
 cmd:option('-vocab_file', 'mscoco2014_train_myconceptsv3vocab.json', 'saving a copy of the vocabulary that was used for training')
 cmd:option('-concept_type', '', 'name of concept type, e.g., myconceptsv3, mydepsv4, empty for auto detect from train_label_file_h5')
 cmd:option('-num_target', -1, 'Number of target concepts, -1 for getting from file')
-cmd:option('-num_test_image', 400, 'Number of test image, -1 for testing all (40504)')
-cmd:option('-test_interval', 10000, 'Number of test image.')
+cmd:option('-num_test_image', -1, 'Number of test image, -1 for testing all (40504)')
+cmd:option('-test_interval', -1, 'Number of test image.')
 cmd:option('-print_log_interval', 20, 'Number of test image.')
 cmd:option('-batch_size', 1, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
@@ -37,7 +37,7 @@ cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN mod
 cmd:option('-back_end', 'cudnn')
 cmd:option('-max_iters', 1000000)
 cmd:option('-max_epochs', 10)
-cmd:option('-save_cp_interval', 0, 'to save a check point every interval number of iterations')
+cmd:option('-save_cp_interval', -1, 'to save a check point every interval number of iterations')
 cmd:option('-test_cp', '', 'name of the checkpoint to test')
 cmd:option('-cp_path', 'cp', 'path to save checkpoints')
 cmd:option('-phase', 'train', 'phase (train/test)')
@@ -78,23 +78,27 @@ if opt.debug == 1 then dbg = require 'debugger' end
 torch.manualSeed(opt.seed)
 
 -- loading Coco data
-local train_loader = CocoData{
+local train_loader = VideoData{
     image_file_h5 = paths.concat(opt.coco_data_root, opt.train_image_file_h5), 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.train_label_file_h5), 
     index_json = paths.concat(opt.coco_data_root, opt.train_index_json), 
     num_target = opt.num_target, 
-    batch_size = opt.batch_size}
+    batch_size = opt.batch_size,
+    mode = 'train'
+}
 
-local val_loader = CocoData{
+local val_loader = VideoData{
     image_file_h5 = paths.concat(opt.coco_data_root, opt.val_image_file_h5), 
     label_file_h5 = paths.concat(opt.coco_data_root, opt.val_label_file_h5),
     index_json = paths.concat(opt.coco_data_root, opt.val_index_json), 
     num_target = opt.num_target, 
-    batch_size = opt.batch_size}
+    batch_size = opt.batch_size,
+    mode = 'test'
+}
 
 -- Update some default options
 if opt.num_target == -1 then opt.num_target = train_loader:getNumTargets() end
-if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumImages() end
+if opt.num_test_image == -1 then opt.num_test_image = val_loader:getNumVideos() end
 if opt.concept_type == '' then opt.concept_type = string.split(paths.basename(opt.train_label_file_h5, '.h5'), '_')[3] end
 if opt.model_id == '' then 
     opt.model_id = string.format('%s_%s_%s_b%d_bias%g_lr%g_wd%g_l%d', 
@@ -102,13 +106,17 @@ if opt.model_id == '' then
             opt.optim, opt.batch_size, opt.bias_init, 
             opt.learning_rate, opt.weight_decay, opt.reg_type)
 end
-if opt.save_cp_interval == 0 then 
-    opt.save_cp_interval = math.ceil(train_loader:getNumImages()/opt.batch_size)
+if opt.save_cp_interval == -1 then 
+    opt.save_cp_interval = math.ceil(train_loader:getNumVideos()/opt.batch_size)
+end
+if opt.test_interval == -1 then
+   opt.test_interval = opt.save_cp_interval 
 end
 if opt.learning_rate_decay_interval == -1 then
-    opt.learning_rate_decay_interval = math.ceil(train_loader:getNumImages()/opt.batch_size)
+    opt.learning_rate_decay_interval = math.ceil(train_loader:getNumVideos()/opt.batch_size)
 end
-opt.iter_per_epoch = math.ceil(train_loader:getNumImages()/opt.batch_size)
+opt.iter_per_epoch = math.ceil(train_loader:getNumVideos()/opt.batch_size)
+
 print(opt)
 ------------------------------------------
 
@@ -214,7 +222,8 @@ local function save_model()
     local dirname = paths.concat(opt.cp_path, opt.version)
     if not paths.dirp(dirname) then paths.mkdir(dirname) end
     
-    local cp_path = path.join(opt.cp_path, opt.version, 'model_' .. opt.model_id .. '_epoch' .. epoch  .. '.t7')
+    -- local cp_path = path.join(opt.cp_path, opt.version, 'model_' .. opt.model_id .. '_epoch' .. epoch  .. '.t7')
+    local cp_path = path.join(opt.cp_path, opt.version, 'model_' .. opt.model_id .. '.t7')
     local cp = {}
     cp.opt = opt
     cp.iter = iter
