@@ -19,6 +19,7 @@ not that VGG caffe's implemenation is Crop (img - mean)
 cf. https://github.com/KaimingHe/deep-residual-networks/issues/5
 --]]
 local bgr_mean_pixel = torch.FloatTensor({103.939, 116.779, 123.68}):view(3, 1, 1):expand(3, 240, 320)
+local flow_mean_pixel = torch.FloatTensor({128}):expand(20):contiguous():view(20, 1, 1):expand(20,240,320)
 local perm = torch.LongTensor{3, 2, 1}
 local vgg_transform_train = t.Compose{
     t.RandomCrop(224),
@@ -27,16 +28,24 @@ local vgg_transform_train = t.Compose{
 local vgg_transform_test = t.Compose{
     t.CenterCrop(224),
 }
-function preprocess_vgg(img, mode)
-    -- convert RGB --> BGR
-    img = img:index(1, perm):float()
-    -- mean subtraction
-    img:add(-1, bgr_mean_pixel)
+function preprocess_vgg(img, mode, image_type, num_img_channel)
+
+    if num_img_channel == 3 then
+        -- convert RGB --> BGR
+        img = img:index(1, perm):float()
+        -- mean subtraction
+        img:add(-1, bgr_mean_pixel)
+    else
+        -- flow image
+        img:add(-1, flow_mean_pixel)
+    end
+    
     if mode == 'train' then
         img = vgg_transform_train(img)
     else
         img = vgg_transform_test(img)
     end
+    
     return img
 end
 
@@ -49,7 +58,7 @@ function VideoData:__init(opt)
     self.crop_size = opt.crop_size or 224
     self.image_height = opt.image_height or 240
     self.image_width = opt.image_width or 320
-    self.num_channels = opt.num_channels or 3
+    self.num_img_channel = opt.num_img_channel or 3
     self.mode = opt.mode or 'train' -- train/test mode: use to do data augmentation/preprocessing
     self.index = torch.Tensor() -- order of video index, to be randomly shuffled every epoch
     
@@ -91,7 +100,7 @@ function VideoData:__init(opt)
 end
 
 function VideoData:getBatch()
-    local video_batch = torch.FloatTensor(self.batch_size, self.num_channels, self.crop_size, self.crop_size)
+    local video_batch = torch.FloatTensor(self.batch_size, self.num_img_channel, self.crop_size, self.crop_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
     
     local counter = self.iterator
@@ -100,12 +109,22 @@ function VideoData:getBatch()
         local idx = self.index[counter]
         local vid = self.ids[idx]
         local num_frame = self.num_frames[idx]
-        local frame_idx = torch.random(1, num_frame)
-        -- fetch the image from h5
-        local img = self.video_data:read(vid):partial({frame_idx,frame_idx},{1, self.num_channels},
-            {1, self.image_height},{1,self.image_width})
-        -- apply transformation
-        video_batch[i] = preprocess_vgg(img[1], self.mode)
+        
+        if self.num_img_channel == 3 then
+            local frame_idx = torch.random(1, num_frame)
+            -- fetch the image from h5
+            local img = self.video_data:read(vid):partial({frame_idx,frame_idx},{1, self.num_img_channel},
+                {1, self.image_height},{1,self.image_width})
+            -- apply transformation
+            video_batch[i] = preprocess_vgg(img[1], self.mode, self.num_img_channel)
+        else
+            local frame_idx = torch.random(1, num_frame - self.num_img_channel)
+            -- fetch the image from h5
+            local img = self.video_data:read(vid):partial({frame_idx, frame_idx+self.num_img_channel-1},
+                {1, self.image_height},{1,self.image_width})
+            -- apply transformation
+            video_batch[i] = preprocess_vgg(img:float(), self.mode, self.num_img_channel)
+        end
         
         if self.has_label then
             

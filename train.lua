@@ -67,6 +67,7 @@ cmd:option('-adam_beta2', 0.999, 'momentum for adam')
 cmd:option('-adam_epsilon', 1e-8, 'momentum for epsilon')
 cmd:option('-weight_decay', 0, 'regularization multiplier')
 cmd:option('-version', 'v0.0', 'release version')    
+cmd:option('-num_img_channel', 3, 'number of input channels (3: spatial net, 20: temporal net)')
 --
 
 cmd:text()
@@ -84,6 +85,7 @@ local train_loader = VideoData{
     index_json = paths.concat(opt.coco_data_root, opt.train_index_json), 
     num_target = opt.num_target, 
     batch_size = opt.batch_size,
+    num_img_channel = opt.num_img_channel,
     mode = 'train'
 }
 
@@ -93,6 +95,7 @@ local val_loader = VideoData{
     index_json = paths.concat(opt.coco_data_root, opt.val_index_json), 
     num_target = opt.num_target, 
     batch_size = opt.batch_size,
+    num_img_channel = opt.num_img_channel,
     mode = 'test'
 }
 

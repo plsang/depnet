@@ -45,7 +45,7 @@ function model_utils.build_conv_block(model, nInputDim, nOutputDim, kernel_size,
 end
 
 -- Build basic vgg net from conv blocks
-function model_utils.build_vgg_net(num_target)
+function model_utils.build_vgg_net(num_target, num_img_channel)
     local main_model = nn.Sequential()
     -- group 1: frozen weight
     local model = nn.Sequential()
@@ -53,7 +53,7 @@ function model_utils.build_vgg_net(num_target)
     -- learing rate & weight decay multipliers for this group
     model.frozen = true
     
-    model_utils.build_conv_block(model, 3, 64, 3, 1, 1, 'conv1_1', 'relu1_1')
+    model_utils.build_conv_block(model, num_img_channel, 64, 3, 1, 1, 'conv1_1', 'relu1_1')
     model_utils.build_conv_block(model, 64, 64, 3, 1, 1, 'conv1_2', 'relu1_2')
     model:add(cudnn.SpatialMaxPooling(2, 2, 2, 2, 0, 0):ceil())
     model:get(#model).name = 'pool1'
@@ -111,7 +111,7 @@ end
 
 -- to replace function finetune_vgg
 function model_utils.vgg_net(opt)
-    local model = model_utils.build_vgg_net(opt.num_target)
+    local model = model_utils.build_vgg_net(opt.num_target, opt.num_img_channel)
     model:add(nn.View(-1):setNumInputDims(3)) -- 1x1x1000 --> 1000
     model:get(#model).name = 'torch_view'
     return model
@@ -674,7 +674,31 @@ function model_utils.load_model(opt)
         print('loading network from a vgg pretrained model')
         local model_vgg = model_utils.load_vgg(opt)
         local parameters_vgg = model_vgg:getParameters() -- all params as one flat variables
-        parameters[{{1,134260544}}]:copy(parameters_vgg[{{1,134260544}}])
+        
+        if opt.num_img_channel == 3 then
+            local fc7_end = parameters_vgg:nElement() - 4097*1000
+            assert(fc7_end == 134260544)
+            parameters[{{1,fc7_end}}]:copy(parameters_vgg[{{1,fc7_end}}])
+        else
+            -- model_vgg.modules[1].weight of size 64x3x3x3
+            local weight_first_layer = model_vgg.modules[1].weight:mean(2):expand(64, opt.num_img_channel, 3, 3)
+            local n_weight_vgg = model_vgg.modules[1].weight:nElement()
+            local n_weight_new = weight_first_layer:nElement()
+            
+            local fc7_end_vgg = parameters_vgg:nElement() - 4097*1000
+            local fc7_end_new = parameters:nElement() - 4097*opt.num_target
+            
+            -- copy weight of the first layer
+            parameters[{{1,n_weight_new}}]:copy(weight_first_layer)
+            
+            -- copybias of the first layer
+            assert(torch.norm(model_vgg.modules[1].bias - parameters_vgg[{{n_weight_vgg+1,n_weight_vgg+64}}]) == 0)
+            parameters[{{n_weight_new+1, n_weight_new+64}}]:copy(model_vgg.modules[1].bias)
+            
+            -- copy remaining weights
+            assert((fc7_end_new - n_weight_new) == (fc7_end_vgg - n_weight_vgg))
+            parameters[{{n_weight_new+65, fc7_end_new}}]:copy(parameters_vgg[{{n_weight_vgg+65,fc7_end_vgg}}])
+        end
         parameters_vgg = nil
         model_vgg = nil
     end

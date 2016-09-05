@@ -11,7 +11,7 @@ import numpy as np
 import glob
 import cv2
 from random import shuffle, seed
-from scipy.misc import imread
+from scipy.misc import imread, imresize
 
 import logging
 from datetime import datetime
@@ -25,7 +25,7 @@ def read_img(image_file, image_height, image_width):
 
     if h != image_height or w != image_width:
         logger.info(' resizing image: %s', image_file)	
-        im = imresize(im, (image_width, image_height), 'bicubic') 
+        im = imresize(im, (image_height, image_width), 'bicubic') 
    
     return im
                     
@@ -78,7 +78,7 @@ def load_flow(params):
             images[2*i] = im_x.astype(np.uint8, copy=True)
             images[2*i+1] = im_y.astype(np.uint8, copy=True)
         
-        logger.info('processed %d/%d (%.2f%% done) (%d images)' % (iv, num_videos, iv*100.0/num_videos, num_images))
+        logger.info('processed %d/%d (%.2f%% done) (%d images)' % (iv+1, num_videos, (iv+1)*100.0/num_videos, num_images))
     
     f.close()
     logger.info('Wrote image data to %s', params['output_h5']) 
@@ -138,7 +138,7 @@ def load_rgb(params):
             
             images[i] = im.astype(np.uint8, copy=True)
         
-        logger.info('processed %d/%d (%.2f%% done) (%d images)' % (iv, num_videos, iv*100.0/num_videos, num_images))
+        logger.info('processed %d/%d (%.2f%% done) (%d images)' % (iv+1, num_videos, (iv+1)*100.0/num_videos, num_images))
     
     f.close()
     logger.info('Wrote image data to %s', params['output_h5']) 

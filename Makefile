@@ -4,47 +4,146 @@ CLCV_DATA_ROOT = $(CLCV_ROOT)/data
 CLCV_TOOLS_ROOT = $(CLCV_ROOT)/tools
 LOG_ROOT = ./log
 
+# corpora/data/tools directories
 MSRVTT_SYM = msrvtt
 MSRVTT_ROOT = $(CLCV_CORPORA_ROOT)/$(MSRVTT_SYM)
 MSRVTT_DATA_ROOT = $(CLCV_DATA_ROOT)/$(MSRVTT_SYM)
+
+TVV2T_SYM = tvv2t
+TVV2T_ROOT = $(CLCV_CORPORA_ROOT)/$(TVV2T_SYM)
+TVV2T_DATA_ROOT = $(CLCV_DATA_ROOT)/$(TVV2T_SYM)
+TVV2T_SETS = train test
+
 MODEL_ROOT = $(CLCV_DATA_ROOT)/cv_models
+SHARED_ROOT = /mnt/data
 
-MSRVTT_SET = train val
+DEPNET_ROOT = ../depnet
 
-MODEL_SET = myconceptsv3 mydepsv4 mypasv4 mypasprepv4
+MSRVTT_SETS = train val 
+MODEL_SET = myconceptsv3 mydepsv4 mypasv4 mypasprepv4 exconceptsv3 exdepsv4 expasv4 expasprepv4
+MULTITASK_MODEL_SET = myconceptsv3mydepsv4 myconceptsv3mypasv4 myconceptsv3mypasprepv4 \
+			exconceptsv3exdepsv4 exconceptsv3expasv4 exconceptsv3expasprepv4
+
+ATTACH_VOCAB_PY = ./attachvocab2h5.py
+ATTACH_IDS_PY = ./attachIDs2h5.py
 
 ### DEFAULT PARAMETERS
 
-VER?=v1
-GID?=2
+NDIM?=1000
+VER?=v2
+GID?=5
 WD?=0
 LR?=0.00001
-BIAS?=-6.58
-BS?=4
+BIAS?=0
+BS?=16
 OP?=adam
-EP?=1
+EP?=1000
+
+MODEL_ID = depnet-msrvtt
+
+# function to compute set/model/val name from filename
+setnameof = $(word 2,$(subst _, ,$(basename $(notdir $(1)))))
+modeltypeof = $(word 2,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $(1)))))))
+valtypeof = $(word 3,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $(1)))))))
+dataprefixof = $(word 1,$(subst _, ,$(basename $(notdir $(1)))))
+
+##### TARGETS
+
+all: prepo_vgg prepo_msmil
+
+extract-vgg: $(patsubst %,extract-vgg-%,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+extract-msmil: $(patsubst %,extract-msmil-%,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+extract-resmap: $(patsubst %,extract-resmap-%,$(MODEL_SET))
 
 ###### PRE-PROCESSING
 
-prepo_vgg: $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_vgg.h5 $(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_vgg.h5
-$(MSRVTT_DATA_ROOT)/msrvtt_%_preprocessedimages_vgg.h5: $(MSRVTT_ROOT)/msrvtt_captions_%.json
-	mkdir -p $(LOG_ROOT)/prepo
-	python preprocess_video.py --input_json $^ \
-		--output_h5 $@ \
-		--output_json $(MSRVTT_DATA_ROOT)/msrvtt_$*_preprocessedimages_vgg.json \
-		--image_root $(MSRVTT_ROOT)/TrainValFlow \
-		--image_height 240 --image_width 320 --frame_type rgb --frame_sample 8 \
-		2>&1 | tee $(LOG_ROOT)/prepo/msrvtt_$*_preprocessedimages_vgg.txt
+prepo_vgg: prepo_vgg_rgb prepo_vgg_flow
 
-prepo_msmil: $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_msmil.h5 $(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_msmil.h5
-$(MSRVTT_DATA_ROOT)/msrvtt_%_preprocessedimages_msmil.h5: $(MSRVTT_ROOT)/msrvtt_captions_%2014.json
+prepo_vgg_rgb: $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_rgb.h5,$(MSRVTT_SETS)) \
+	$(patsubst %,$(TVV2T_DATA_ROOT)/tvv2t_%_image_depnet_preprocessedimages_vgg_rgb.h5,$(TVV2T_SETS))
+prepo_vgg_flow: $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_flow.h5,$(MSRVTT_SETS)) \
+	$(patsubst %,$(TVV2T_DATA_ROOT)/tvv2t_%_image_depnet_preprocessedimages_vgg_flow.h5,$(TVV2T_SETS))
+ 
+$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_rgb.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_rgb.h5: \
+    $(MSRVTT_ROOT)/msrvtt_captions_%.json
 	mkdir -p $(LOG_ROOT)/prepo
-	python preprocess_video.py --input_json $^ \
+	python $(DEPNET_ROOT)/preprocess_video.py --input_json $^ \
 		--output_h5 $@ \
-		--output_json $(MSRVTT_DATA_ROOT)/msrvtt_$*_preprocessedimages_msmil.json \
+		--output_json $(json_file) \
+		--image_root $(MSRVTT_ROOT)/TrainValFlow \
+		--image_height 240 --image_width 320 --type rgb --frame_sample 8 
+		2>&1 | tee $(LOG_ROOT)/prepo/msrvtt_$*_image_depnet_preprocessedimages_vgg_rgb.txt
+
+$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_flow.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_flow.h5: \
+    $(MSRVTT_ROOT)/msrvtt_captions_%.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_video.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--image_root $(MSRVTT_ROOT)/TrainValFlow \
+		--image_height 240 --image_width 320 --type flow
+		2>&1 | tee $(LOG_ROOT)/prepo/msrvtt_$*_image_depnet_preprocessedimages_vgg_flow.txt
+
+$(TVV2T_DATA_ROOT)/tvv2t_%_image_depnet_preprocessedimages_vgg_rgb.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(TVV2T_DATA_ROOT)/tvv2t_%_image_depnet_preprocessedimages_vgg_rgb.h5: \
+    $(TVV2T_ROOT)/tvv2t_captions_%.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_video.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--image_root $(TVV2T_ROOT)/frames/$* \
+		--image_height 240 --image_width 320 --type rgb --frame_sample 8 
+		2>&1 | tee $(LOG_ROOT)/prepo/tvv2t_$*_image_depnet_preprocessedimages_vgg_rgb.txt
+
+$(TVV2T_DATA_ROOT)/tvv2t_%_image_depnet_preprocessedimages_vgg_flow.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(TVV2T_DATA_ROOT)/tvv2t_%_image_depnet_preprocessedimages_vgg_flow.h5: \
+    $(TVV2T_ROOT)/tvv2t_captions_%.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_video.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--image_root $(TVV2T_ROOT)/frames/$* \
+		--image_height 240 --image_width 320 --type flow
+		2>&1 | tee $(LOG_ROOT)/prepo/tvv2t_$*_image_depnet_preprocessedimages_vgg_flow.txt
+
+
+
+prepo_msmil: $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_msmil.h5,$(MSRVTT_SETS)) \
+             $(patsubst %,$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_msmil.h5,$(DAQUAR_SETS))
+
+$(MSRVTT_DATA_ROOT)/msrvtt_dev%_image_depnet_preprocessedimages_msmil.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSRVTT_DATA_ROOT)/msrvtt_dev%_image_depnet_preprocessedimages_msmil.h5: \
+    $(MSRVTT_DATA_ROOT)/msrvtt_dev%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(MSRVTT_ROOT)/images/train2014 \
+		--images_size 565 \
+		2>&1 | tee $(LOG_ROOT)/prepo/msrvtt_$*_image_depnet_preprocessedimages_msmil.txt
+$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_msmil.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_msmil.h5: \
+    $(MSRVTT_DATA_ROOT)/msrvtt_%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
 		--images_root $(MSRVTT_ROOT)/images/$*2014 \
 		--images_size 565 \
-		2>&1 | tee $(LOG_ROOT)/prepo/msrvtt_$*_preprocessedimages_msmil.txt
+		2>&1 | tee $(LOG_ROOT)/prepo/msrvtt_$*_image_depnet_preprocessedimages_msmil.txt
+$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_msmil.h5: json_file = $(patsubst %.h5,%.json,$@)
+$(DAQUAR_DATA_ROOT)/daquar_%_image_depnet_preprocessedimages_msmil.h5: \
+    $(DAQUAR_DATA_ROOT)/daquar_%_imageinfo.json
+	mkdir -p $(LOG_ROOT)/prepo
+	python $(DEPNET_ROOT)/preprocess_image.py --input_json $^ \
+		--output_h5 $@ \
+		--output_json $(json_file) \
+		--images_root $(DAQUAR_ROOT)/nyu_depth_images \
+		--images_size 565 \
+		2>&1 | tee $(LOG_ROOT)/prepo/daquar_$*_image_depnet_preprocessedimages_msmil.txt
+
 
 vgg16-model: $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel
 $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel:
@@ -54,205 +153,334 @@ $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel:
           https://gist.githubusercontent.com/ksimonyan/211839e770f7b538e2d8/raw/0067c9b32f60362c74f4c445a080beed06b07eb3/VGG_ILSVRC_16_layers_deploy.prototxt \
           http://dl.caffe.berkeleyvision.org/caffe_ilsvrc12.tar.gz
 	cd $(MODEL_ROOT)/pretrained-models/vgg-imagenet; tar -xzf caffe_ilsvrc12.tar.gz; rm caffe_ilsvrc12.tar.gz 
-    
+
+######  CONVERT TO DEPNET FORMAT FOR TRAINING USING DEPNET (WHICH DOES NOT SUPPORT STRING DATA)
+%depnetfmt.h5:
+	python $(DEPNET_ROOT)/convert_index_format.py --input_h5 $*.h5 --output_h5 $@
+
+###### CREATE A SYMBOLIC LINK FROM MY*VOCAB TO EX*VOCAB 
+$(MSRVTT_DATA_ROOT)/msrvtt_train_captions_ex%vocab.json:
+	cp $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_my$*vocab.json $@
 
 ###### VGG MODELS
 
-vgg-train-models: vgg-myconceptsv3-model vgg-mydepsv4-model vgg-mypasv4-model vgg-mypasprepv4-model
-vgg-test-models: vgg-myconceptsv3-test vgg-mydepsv4-test vgg-mypasv4-test vgg-mypasprepv4-test
+vgg-train-models: $(patsubst %,vgg-%-model,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+vgg-test-models: $(patsubst %,vgg-%-test,$(MODEL_SET) $(MULTITASK_MODEL_SET))
 
-vgg-%-model: $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \    $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_vgg.h5 \
-$(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_vgg.h5 \
-$(MSRVTT_DATA_ROOT)/msrvtt_train_%.h5 $(MSRVTT_DATA_ROOT)/msrvtt_train_%.h5
-	mkdir -p $(MODEL_ROOT)/vgg-$*/$(VER)
-	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root $(MSRVTT_DATA_ROOT) \
-		-train_label_file_h5 msrvtt_train_$*.h5 \
-		-val_label_file_h5 msrvtt_val_$*.h5 \
-		-train_image_file_h5 msrvtt_train_preprocessedimages_vgg.h5 \
-		-train_index_json msrvtt_train_preprocessedimages_vgg.json \
-		-val_image_file_h5 msrvtt_val_preprocessedimages_vgg.h5 \
-		-val_index_json msrvtt_val_preprocessedimages_vgg.json \
-		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt  \
-		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
-		-batch_size $(BS) -optim $(OP) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
-		-vocab_file msrvtt_train_$*vocab.json -model_type vgg \
-		-cp_path $(MODEL_ROOT)/vgg-$* -model_id vgg-$* -max_epochs $(EP) \
-		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
-		2>&1 | tee $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).log
-        
-vgg-extract-fc8: $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_train_vgg-%fc8.h5, $(MODEL_SET)) \
-    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_val_vgg-%fc8.h5,$(MODEL_SET))
-$(MSRVTT_DATA_ROOT)/msrvtt_train_vgg-%fc8.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_vgg.h5 \
-            -model_type vgg -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
-            -layer fc8 -output_file $@
-$(MSRVTT_DATA_ROOT)/msrvtt_val_vgg-%fc8.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_vgg.h5 \
-            -model_type vgg -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 \
-            -layer fc8 -output_file $@
-            
-vgg-extract-fc7: $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_train_vgg-%fc7.h5, $(MODEL_SET)) \
-    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_val_vgg-%fc7.h5,$(MODEL_SET))
-$(MSRVTT_DATA_ROOT)/msrvtt_train_vgg-%fc7.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-		-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_vgg.h5 \
-            	-model_type vgg -print_log_interval 1000 -batch_size $(BS) -version $(VER) \
-            	-test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 -num_target $${NDIM} \
-            	-layer fc7 -output_file $@
-$(MSRVTT_DATA_ROOT)/msrvtt_val_vgg-%fc7.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_vgg.h5 \
-            -model_type vgg -print_log_interval 1000 -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/vgg-$*/$(VER)/model_vgg-$*_epoch$(EP).t7 -num_target $${NDIM} \
-            -layer fc7 -output_file $@
-            
-vgg-%-test: $(MSRVTT_DATA_ROOT)/msrvtt_val_vgg-%fc8.h5
-	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -coco_data_root $(MSRVTT_DATA_ROOT) \
-		-log_dir $(MODEL_ROOT)/vgg-$* \
-		-val_image_file_h5 msrvtt_val_preprocessedimages_vgg.h5 \
-		-val_index_json msrvtt_val_preprocessedimages_vgg.json \
-		-val_label_file_h5 msrvtt_val_$*.h5 -model_type vgg -test_mode file \
-            	-test_cp $^ -version $(VER)
-            
+
+###### model training
+
+VGG_MODEL_PATTERN = $(MODEL_ROOT)/depnet-vgg-%/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7
+VGG_VOCAB_PATTERN = $(MODEL_ROOT)/depnet-vgg-%/$(VER)/$(MODEL_ID)_vocab.json
+vgg-myconceptsv3-model: $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3)
+vgg-mydepsv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),mydepsv4)
+vgg-mypasv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),mypasv4)
+vgg-mypasprepv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),mypasprepv4)
+vgg-exconceptsv3-model: $(patsubst %,$(VGG_MODEL_PATTERN),exconceptsv3)
+vgg-exdepsv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),exdepsv4)
+vgg-expasv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),expasv4)
+vgg-expasprepv4-model: $(patsubst %,$(VGG_MODEL_PATTERN),expasprepv4)
+
+$(VGG_MODEL_PATTERN) $(VGG_VOCAB_PATTERN): \
+    $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_preprocessedimages_vgg.h5,train val) \
+    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_preprocessedimages_vgg.json,train val) \
+    $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_%depnetfmt.h5 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_val_captions_%depnetfmt.h5 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_%vocab.json
+	mkdir -p $(MODEL_ROOT)/depnet-vgg-$*/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+	th $(DEPNET_ROOT)/train.lua -coco_data_root $(MSRVTT_DATA_ROOT) \
+		-train_image_file_h5 $(notdir $(word 2,$^)) \
+		-val_image_file_h5 $(notdir $(word 3,$^)) \
+		-train_index_json $(notdir $(word 4,$^)) \
+		-val_index_json $(notdir $(word 5,$^)) \
+		-train_label_file_h5 $(notdir $(word 6,$^)) \
+		-val_label_file_h5 $(notdir $(word 7,$^)) \
+		-vocab_file $(notdir $(word 8,$^)) \
+		-model_type vgg -cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
+		-batch_size $(BS) -optim $(OP) -test_interval -1 -num_test_image -1 -print_log_interval 10 \
+		-cp_path $(MODEL_ROOT)/depnet-vgg-$* -model_id $(MODEL_ID) -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -debug 1 -num_img_channel 3 \
+		2>&1 | tee $(MODEL_ROOT)/depnet-vgg-$*/$(VER)/model_$(MODEL_ID).log
+	cp $(word 8,$^) $(patsubst %,$(VGG_VOCAB_PATTERN),$*)
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev1_captions_$*depnetfmt.h5 2> /dev/null 
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev2_captions_$*depnetfmt.h5 2> /dev/null
+
+
+VGG_TMODEL_PATTERN = $(MODEL_ROOT)/depnet-vgg-%/$(VER)/model_$(MODEL_ID)_t.t7
+VGG_TVOCAB_PATTERN = $(MODEL_ROOT)/depnet-vgg-%/$(VER)/$(MODEL_ID)_vocab_t.json
+vgg-myconceptsv3-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),myconceptsv3)
+vgg-mydepsv4-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),mydepsv4)
+vgg-mypasv4-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),mypasv4)
+vgg-mypasprepv4-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),mypasprepv4)
+vgg-exconceptsv3-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),exconceptsv3)
+vgg-exdepsv4-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),exdepsv4)
+vgg-expasv4-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),expasv4)
+vgg-expasprepv4-tmodel: $(patsubst %,$(VGG_TMODEL_PATTERN),expasprepv4)
+
+$(VGG_TMODEL_PATTERN) $(VGG_TVOCAB_PATTERN): \
+    $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_flow.h5,train val) \
+    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_vgg_flow.json,train val) \
+    $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_%depnetfmt.h5 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_val_captions_%depnetfmt.h5 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_%vocab.json
+	mkdir -p $(MODEL_ROOT)/depnet-vgg-$*/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+	th $(DEPNET_ROOT)/train.lua -coco_data_root $(MSRVTT_DATA_ROOT) \
+                -train_image_file_h5 $(notdir $(word 2,$^)) \
+                -val_image_file_h5 $(notdir $(word 3,$^)) \
+                -train_index_json $(notdir $(word 4,$^)) \
+                -val_index_json $(notdir $(word 5,$^)) \
+                -train_label_file_h5 $(notdir $(word 6,$^)) \
+                -val_label_file_h5 $(notdir $(word 7,$^)) \
+                -vocab_file $(notdir $(word 8,$^)) \
+                -model_type vgg -cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
+                -batch_size $(BS) -optim $(OP) -test_interval -1 -num_test_image -1 -print_log_interval 10 \
+                -cp_path $(MODEL_ROOT)/depnet-vgg-$* -model_id $(MODEL_ID)_t -max_epochs $(EP) \
+                -learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -debug 1 -num_img_channel 20 \
+                2>&1 | tee $(MODEL_ROOT)/depnet-vgg-$*/$(VER)/model_$(MODEL_ID).log
+	cp $(word 8,$^) $(patsubst %,$(VGG_VOCAB_PATTERN),$*)
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev1_captions_$*depnetfmt.h5 2> /dev/null
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev2_captions_$*depnetfmt.h5 2> /dev/null
+
+###### feature extracting
+
+VGG_LAYERS = fc8 fc7
+VGG_SUFFIXES = $(patsubst %,-%.h5,$(VGG_LAYERS))
+vggfilesof = $(foreach suffix,$(VGG_SUFFIXES),$(addsuffix $(suffix),$(patsubst %,$(2)_%_image_depnet-vgg-$(1),$(3))))
+extract-vgg-myconceptsv3: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3) \
+    $(call vggfilesof,myconceptsv3,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,myconceptsv3,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-mydepsv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),mydepsv4) \
+    $(call vggfilesof,mydepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-mypasv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),mypasv4) \
+    $(call vggfilesof,mypasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-mypasprepv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),mypasprepv4) \
+    $(call vggfilesof,mypasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-myconceptsv3mydepsv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3mydepsv4) \
+    $(call vggfilesof,myconceptsv3mydepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,myconceptsv3mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-myconceptsv3mypasv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3mypasv4) \
+    $(call vggfilesof,myconceptsv3mypasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,myconceptsv3mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-myconceptsv3mypasprepv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),myconceptsv3mypasprepv4) \
+    $(call vggfilesof,myconceptsv3mypasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,myconceptsv3mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-exconceptsv3: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),exconceptsv3) \
+    $(call vggfilesof,exconceptsv3,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,exconceptsv3,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-exdepsv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),exdepsv4) \
+    $(call vggfilesof,exdepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,exdepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-expasv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),expasv4) \
+    $(call vggfilesof,expasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,expasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-expasprepv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),expasprepv4) \
+    $(call vggfilesof,expasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,expasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-exconceptsv3exdepsv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),exconceptsv3exdepsv4) \
+    $(call vggfilesof,exconceptsv3exdepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,exconceptsv3exdepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-exconceptsv3expasv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),exconceptsv3expasv4) \
+    $(call vggfilesof,exconceptsv3expasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,exconceptsv3expasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-vgg-exconceptsv3expasprepv4: \
+    $(patsubst %,$(VGG_MODEL_PATTERN),exconceptsv3expasprepv4) \
+    $(call vggfilesof,exconceptsv3expasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call vggfilesof,exconceptsv3expasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+
+
+VGG_FEAT_FILES = $(foreach val,$(MODEL_SET),$(call vggfilesof,$(val),$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS))) \
+                 $(foreach val,$(MODEL_SET),$(call vggfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))) \
+		 $(foreach val,$(MULTITASK_MODEL_SET),$(call vggfilesof,$(val),$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS))) \
+                 $(foreach val,$(MULTITASK_MODEL_SET),$(call vggfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS)))
+
+.SECONDEXPANSION:
+$(VGG_FEAT_FILES): dataprefix = $(call dataprefixof,$@)
+$(VGG_FEAT_FILES): setname = $(call setnameof,$@)
+$(VGG_FEAT_FILES): modeltype = $(call modeltypeof,$@)
+$(VGG_FEAT_FILES): valtype = $(call valtypeof,$@)
+$(VGG_FEAT_FILES): layer = $(word 4,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $@))))))
+$(VGG_FEAT_FILES): %.h5: \
+    $$(dir $$@)$$(call dataprefixof,$$@)_$$(call setnameof,$$@)_image_depnet_preprocessedimages_vgg.h5 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/$(MODEL_ID)_vocab.json
+	NDIM=$$(python -c "import json; v=json.load(open('$(word 3,$^)')); print len(v)") && \
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/extract_features.lua -log_mode console \
+          -image_file_h5 $< \
+          -model_type $(modeltype) -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
+          -test_cp $(word 2,$^) \
+          -layer $(layer) -output_file $@
+	python $(ATTACH_VOCAB_PY) $(if $(subst fc8,,$(layer)),--internal,) $(word 3,$^) $@
+	python $(ATTACH_IDS_PY) $(patsubst %.h5,%.json,$<) $@
+
+###### model testing
+
+#vgg-myconceptsv3-test: $(patsubst %,$(MODEL_ROOT)/depnet-vgg-%/$(VER)/test_model_depnet_epoch$(EP).log,myconceptsv3)
+#$(MODEL_ROOT)/depnet-vgg-%/$(VER)/test_model_depnet_epoch$(EP).log: \
+    $(MODEL_ROOT)/depnet-vgg-%/$(VER)/model_depnet_epoch$(EP).t7 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_dev2_image_depnet_preprocessedimages_vgg.h5 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_dev2_captions_%.h5
+#	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/test.lua -log_mode file -log_dir $(MODEL_ROOT)/depnet-vgg-$* \
+          -coco_data_root $(MSRVTT_DATA_ROOT) \
+          -val_image_file_h5 $(word 2,$^) \
+          -val_label_file_h5 msrvtt_dev2_captions_$*.h5 -model_type vgg -test_mode file \
+          -test_cp $< \
+          -version $(VER)
+
+
+
 ###### MSMIL MODEL
 
-msmil-train-models: msmil-myconceptsv3-model msmil-mydepsv4-model msmil-mypasv4-model msmil-mypasprepv4-model
-msmil-test-models: msmil-myconceptsv3-test msmil-mydepsv4-test msmil-mypasv4-test msmil-mypasprepv4-test
+msmil-train-models: $(patsubst %,msmil-%-model,$(MODEL_SET) $(MULTITASK_MODEL_SET))
+msmil-test-models: $(patsubst %,msmil-%-test,$(MODEL_SET) $(MULTITASK_MODEL_SET))
 
-msmil-%-model: $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \ $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_msmil.h5 \
-$(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_msmil.h5 \
-$(MSRVTT_DATA_ROOT)/msrvtt_train_%.h5 $(MSRVTT_DATA_ROOT)/msrvtt_train_%.h5
-	mkdir -p $(MODEL_ROOT)/msmil-$*/$(VER)
-	CUDA_VISIBLE_DEVICES=$(GID) th train.lua -coco_data_root $(MSRVTT_DATA_ROOT) \
-		-train_label_file_h5 msrvtt_train_$*.h5 \
-		-val_label_file_h5 msrvtt_val_$*.h5 \
-		-train_image_file_h5 msrvtt_train_preprocessedimages_msmil.h5 \
-		-train_index_json msrvtt_train_preprocessedimages_msmil.json \
-		-val_image_file_h5 msrvtt_val_preprocessedimages_msmil.h5 \
-		-val_index_json msrvtt_val_preprocessedimages_msmil.json \
-		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt  \
-		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+
+###### model training
+
+MSMIL_MODEL_PATTERN = $(MODEL_ROOT)/depnet-msmil-%/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7
+MSMIL_VOCAB_PATTERN = $(MODEL_ROOT)/depnet-msmil-%/$(VER)/$(MODEL_ID)_vocab.json
+msmil-myconceptsv3-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3)
+msmil-mydepsv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),mydepsv4)
+msmil-mypasv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasv4)
+msmil-mypasprepv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasprepv4)
+msmil-exconceptsv3-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),exconceptsv3)
+msmil-exdepsv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),exdepsv4)
+msmil-expasv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),expasv4)
+msmil-expasprepv4-model: $(patsubst %,$(MSMIL_MODEL_PATTERN),expasprepv4)
+
+$(MSMIL_MODEL_PATTERN) $(MSMIL_VOCAB_PATTERN): \
+    $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
+    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_msmil.h5,dev1 dev2) \
+    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_%_image_depnet_preprocessedimages_msmil.json,dev1 dev2) \
+    $(MSRVTT_DATA_ROOT)/msrvtt_dev1_captions_%depnetfmt.h5 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_dev2_captions_%depnetfmt.h5 \
+    $(MSRVTT_DATA_ROOT)/msrvtt_dev1_captions_%vocab.json
+	mkdir -p $(MODEL_ROOT)/depnet-msmil-$*/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/train.lua -coco_data_root $(MSRVTT_DATA_ROOT) \
+		-train_label_file_h5 msrvtt_dev1_captions_$*depnetfmt.h5 \
+		-val_label_file_h5 msrvtt_dev2_captions_$*depnetfmt.h5 \
+		-train_image_file_h5 $(notdir $(word 2,$^)) \
+		-val_image_file_h5 $(notdir $(word 3,$^)) \
+		-train_index_json $(notdir $(word 4,$^)) \
+		-val_index_json $(notdir $(word 5,$^)) \
+		-cnn_proto $<VGG_ILSVRC_16_layers_deploy.prototxt -cnn_model $< \
 		-batch_size $(BS) -optim $(OP) -test_interval 1000 -num_test_image 400 -print_log_interval 10 \
-		-vocab_file msrvtt_train_$*vocab.json -model_type milmaxnor -cp_path $(MODEL_ROOT)/msmil-$* -model_id msmil-$*\
-		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -max_epochs $(EP) \
-		2>&1 | tee $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).log
-        
-msmil-extract-fc8: $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_train_msmil-%fc8.h5, $(MODEL_SET)) \
-    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_val_msmil-%fc8.h5,$(MODEL_SET))
-$(MSRVTT_DATA_ROOT)/msrvtt_train_msmil-%fc8.h5: 
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_msmil.h5 \
-            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
-            -layer fc8 -output_file $@
-$(MSRVTT_DATA_ROOT)/msrvtt_val_msmil-%fc8.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_msmil.h5 \
-            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
-            -layer fc8 -output_file $@
-            
-msmil-extract-fc7: $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_train_msmil-%fc7.h5, $(MODEL_SET)) \
-    $(patsubst %,$(MSRVTT_DATA_ROOT)/msrvtt_val_msmil-%fc7.h5,$(MODEL_SET))
-$(MSRVTT_DATA_ROOT)/msrvtt_train_msmil-%fc7.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_train_preprocessedimages_msmil.h5 \
-            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
-            -layer fc7 -output_file $@
-$(MSRVTT_DATA_ROOT)/msrvtt_val_msmil-%fc7.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_$*vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_msmil.h5 \
-            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/msmil-$*/$(VER)/model_msmil-$*_epoch$(EP).t7 \
-            -layer fc7 -output_file $@
-msmil-extract-myconceptsv3responsemapfc8: $(MSRVTT_DATA_ROOT)/msrvtt_train_msmil-myconceptsv3responsemapfc8.h5 \
-	$(MSRVTT_DATA_ROOT)/msrvtt_val_msmil-myconceptsv3responsemapfc8.h5
-$(MSRVTT_DATA_ROOT)/msrvtt_%_msmil-myconceptsv3responsemapfc8.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_myconceptsv3vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_$*_preprocessedimages_msmil.h5 \
-            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/msmil-myconceptsv3/$(VER)/model_msmil-myconceptsv3_epoch$(EP).t7 \
-            -layer responsemapfc8 -output_file $@
+		-vocab_file msrvtt_dev1_captions_$*vocab.json -model_type milmaxnor \
+                -cp_path $(MODEL_ROOT)/depnet-msmil-$* -model_id $(MODEL_ID) -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) \
+		2>&1 | tee $(MODEL_ROOT)/depnet-msmil-$*/$(VER)/model_$(MODEL_ID)_epoch$(EP).log
+	cp $(word 8,$^) $(patsubst %,$(MSMIL_VOCAB_PATTERN),$*)
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev1_captions_$*depnetfmt.h5 2> /dev/null
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_dev2_captions_$*depnetfmt.h5 2> /dev/null
 
-msmil-extract-myconceptsv3responsemapfc7: $(MSRVTT_DATA_ROOT)/msrvtt_train_msmil-myconceptsv3responsemapfc7.h5 \
-	$(MSRVTT_DATA_ROOT)/msrvtt_val_msmil-myconceptsv3responsemapfc7.h5
-$(MSRVTT_DATA_ROOT)/msrvtt_%_msmil-myconceptsv3responsemapfc7.h5:
-	NDIM=$$(python -c "import json; v=json.load(open('$(MSRVTT_DATA_ROOT)/msrvtt_train_myconceptsv3vocab.json')); print len(v)") && \
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_$*_preprocessedimages_msmil.h5 \
-            -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
-            -test_cp $(MODEL_ROOT)/msmil-myconceptsv3/$(VER)/model_msmil-myconceptsv3_epoch$(EP).t7 \
-            -layer responsemapfc7 -output_file $@
 
-msmil-%-test: $(MSRVTT_DATA_ROOT)/msrvtt_val_msmil-%fc8.h5
-	CUDA_VISIBLE_DEVICES=$(GID) th test.lua -log_mode file -log_dir $(MODEL_ROOT)/msmil-$* \
-		-val_image_file_h5 $(MSRVTT_DATA_ROOT)/msrvtt_val_preprocessedimages_msmil.h5 \
-		-val_label_file_h5 msrvtt_val_$*.h5 -model_type milmaxnor -test_mode file \
-            	-test_cp $^ -version $(VER)
-            
 
-###### MULTITASK MODEL
-### myconceptsv3 + mydepsv4
-vgg-multitask-train:
-	mkdir -p $(MODEL_ROOT)/vgg-multitask/$(VER)
-	CUDA_VISIBLE_DEVICES=$(GID) th train_multitask.lua \
-		-coco_data_root $(MSRVTT_DATA_ROOT) \
-		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt \
-		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
-		-train_image_file_h5 msrvtt_dev1_image_depnet_preprocessedimages_vgg.h5 \
-		-train_index_json msrvtt_dev1_image_depnet_preprocessedimages_vgg.json \
-		-val_image_file_h5 msrvtt_dev2_image_depnet_preprocessedimages_vgg.h5 \
-		-val_index_json msrvtt_dev2_image_depnet_preprocessedimages_vgg.json \
-		-train_label_file_h5_task1 msrvtt_dev1_captions_myconceptsv3.h5 \
-		-val_label_file_h5_task1 msrvtt_dev2_captions_myconceptsv3.h5 \
-		-train_label_file_h5_task2 msrvtt_dev1_captions_mydepsv4.h5 \
-		-val_label_file_h5_task2 msrvtt_dev2_captions_mydepsv4.h5 \
-		-test_interval 1000 -num_test_image 400 -max_epochs $(EP) \
-		-print_log_interval 10 -model_type vgg -multitask_type 1 \
-		-batch_size $(BS) -optim $(OP) -bias_init $(BIAS) -weight_decay $(WD) -version $(VER) -learning_rate $(LR) \
-		2>&1 | tee $(MODEL_ROOT)/vgg-multitask/$(VER)/model_vgg-multitask_epoch$(EP).log
+###### feature extracting
 
-### myconceptsv3 + mydepsv4
-msmil-multitask-train:
-	mkdir -p $(MODEL_ROOT)/msmil-multitask/$(VER)
-	CUDA_VISIBLE_DEVICES=$(GID) th train_multitask.lua \
-		-coco_data_root $(MSRVTT_DATA_ROOT) \
-		-cnn_proto $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers_deploy.prototxt \
-		-cnn_model $(MODEL_ROOT)/pretrained-models/vgg-imagenet/VGG_ILSVRC_16_layers.caffemodel \
-		-train_image_file_h5 msrvtt_dev1_image_depnet_preprocessedimages_msmil.h5 \
-		-train_index_json msrvtt_dev1_image_depnet_preprocessedimages_msmil.json \
-		-val_image_file_h5 msrvtt_dev2_image_depnet_preprocessedimages_msmil.h5 \
-		-val_index_json msrvtt_dev2_image_depnet_preprocessedimages_msmil.json \
-		-train_label_file_h5_task1 msrvtt_dev1_captions_myconceptsv3.h5 \
-		-val_label_file_h5_task1 msrvtt_dev2_captions_myconceptsv3.h5 \
-		-train_label_file_h5_task2 msrvtt_dev1_captions_mydepsv4.h5 \
-		-val_label_file_h5_task2 msrvtt_dev2_captions_mydepsv4.h5 \
-		-test_interval 1000 -num_test_image 400 -max_epochs $(EP) \
-		-print_log_interval 10 -model_type milmaxnor -multitask_type 1 \
-		-batch_size $(BS) -optim $(OP) -bias_init $(BIAS) -weight_decay $(WD) -version $(VER) -learning_rate $(LR) \
-		2>&1 | tee $(MODEL_ROOT)/msmil-multitask/$(VER)/model_msmil-multitask_epoch$(EP).log
-        
-vgg-multitask-test:
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features.lua -log_mode console \
-			-image_file_h5 data/Microsoft_COCO/msrvtt_val_preprocessedimages_vgg.h5 \
-            -model_type vgg -num_target 22034 -print_log_interval 1000 -batch_size 32 \
-            -test_cp cp/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP).t7 -version $(VER)
-	CUDA_VISIBLE_DEVICES=$(GID) th test_multitask.lua -log_mode file \
-			-val_image_file_h5 data/Microsoft_COCO/msrvtt_val_preprocessedimages_vgg.h5 \
-			-model_type vgg -test_mode file -version $(VER) \
-            -test_cp data/Microsoft_COCO/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP)_fc8.h5
-            
+MSMIL_LAYERS = fc8 fc7
+MSMIL_SUFFIXES = $(patsubst %,-%.h5,$(MSMIL_LAYERS))
+msmilfilesof = $(foreach suffix,$(MSMIL_SUFFIXES),$(addsuffix $(suffix),$(patsubst %,$(2)_%_image_depnet-msmil-$(1),$(3))))
+extract-msmil-myconceptsv3: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3) \
+    $(call msmilfilesof,myconceptsv3,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,myconceptsv3,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-mydepsv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mydepsv4) \
+    $(call msmilfilesof,mydepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-mypasv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasv4) \
+    $(call msmilfilesof,mypasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-mypasprepv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),mypasprepv4) \
+    $(call msmilfilesof,mypasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-myconceptsv3mydepsv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3mydepsv4) \
+    $(call msmilfilesof,myconceptsv3mydepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,myconceptsv3mydepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-myconceptsv3mypasv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3mypasv4) \
+    $(call msmilfilesof,myconceptsv3mypasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,myconceptsv3mypasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-myconceptsv3mypasprepv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),myconceptsv3mypasprepv4) \
+    $(call msmilfilesof,myconceptsv3mypasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,myconceptsv3mypasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-exconceptsv3: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),exconceptsv3) \
+    $(call msmilfilesof,exconceptsv3,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,exconceptsv3,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-exdepsv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),exdepsv4) \
+    $(call msmilfilesof,exdepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,exdepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-expasv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),expasv4) \
+    $(call msmilfilesof,expasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,expasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-expasprepv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),expasprepv4) \
+    $(call msmilfilesof,expasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,expasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-exconceptsv3exdepsv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),exconceptsv3exdepsv4) \
+    $(call msmilfilesof,exconceptsv3exdepsv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,exconceptsv3exdepsv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-exconceptsv3expasv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),exconceptsv3expasv4) \
+    $(call msmilfilesof,exconceptsv3expasv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,exconceptsv3expasv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+extract-msmil-exconceptsv3expasprepv4: \
+    $(patsubst %,$(MSMIL_MODEL_PATTERN),exconceptsv3expasprepv4) \
+    $(call msmilfilesof,exconceptsv3expasprepv4,$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS)) \
+    $(call msmilfilesof,exconceptsv3expasprepv4,$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))
+
+MSMIL_FEAT_FILES = \
+    $(foreach val,$(MODEL_SET),$(call msmilfilesof,$(val),$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS))) \
+    $(foreach val,$(MODEL_SET),$(call msmilfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS))) \
+    $(foreach val,$(MULTITASK_MODEL_SET),$(call msmilfilesof,$(val),$(MSRVTT_DATA_ROOT)/msrvtt,$(MSRVTT_SETS))) \
+    $(foreach val,$(MULTITASK_MODEL_SET),$(call msmilfilesof,$(val),$(DAQUAR_DATA_ROOT)/daquar,$(DAQUAR_SETS)))
+
+$(MSMIL_FEAT_FILES): dataprefix = $(call dataprefixof,$@)
+$(MSMIL_FEAT_FILES): setname = $(call setnameof,$@)
+$(MSMIL_FEAT_FILES): modeltype = $(call modeltypeof,$@)
+$(MSMIL_FEAT_FILES): valtype = $(call valtypeof,$@)
+$(MSMIL_FEAT_FILES): layer = $(word 4,$(subst -, ,$(word 4,$(subst _, ,$(basename $(notdir $@))))))
+$(MSMIL_FEAT_FILES): %.h5: \
+    $$(dir $$@)$$(call dataprefixof,$$@)_$$(call setnameof,$$@)_image_depnet_preprocessedimages_msmil.h5 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/model_$(MODEL_ID)_epoch$(EP).t7 \
+    $(MODEL_ROOT)/depnet-$$(call modeltypeof,$$@)-$$(call valtypeof,$$@)/$(VER)/$(MODEL_ID)_vocab.json
+	NDIM=$$(python -c "import json; v=json.load(open('$(word 3,$^)')); print len(v)") && \
+          LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+          th $(DEPNET_ROOT)/extract_features.lua -log_mode console \
+	  -image_file_h5 $< \
+          -model_type milmaxnor -print_log_interval 1000 -num_target $${NDIM} -batch_size $(BS) -version $(VER) \
+          -test_cp $(word 2,$^) \
+          -layer $(layer) -output_file $@
+	python $(ATTACH_VOCAB_PY) $(if $(subst fc8,,$(layer)),--internal,) $(word 3,$^) $@
+	python $(ATTACH_IDS_PY) $(patsubst %.h5,%.json,$<) $@
+
