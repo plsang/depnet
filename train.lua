@@ -32,6 +32,7 @@ cmd:option('-num_test_image', -1, 'Number of test image, -1 for testing all (405
 cmd:option('-test_interval', -1, 'Number of test image.')
 cmd:option('-print_log_interval', 20, 'Number of test image.')
 cmd:option('-batch_size', 1, 'Number of image per batch')
+cmd:option('-val_batch_size', 1, 'Number of image per batch')
 cmd:option('-cnn_proto','model/VGG_ILSVRC_16_layers_deploy.prototxt','path to CNN prototxt file in Caffe format.')
 cmd:option('-cnn_model','model/VGG_ILSVRC_16_layers.caffemodel','path to CNN model file containing the weights, Caffe format.')
 cmd:option('-back_end', 'cudnn')
@@ -70,6 +71,7 @@ cmd:option('-version', 'v0.0', 'release version')
 cmd:option('-num_img_channel', 3, 'number of input channels (3: spatial net, 20: temporal net)')
 cmd:option('-fc6_dropout', 0.5, 'Dropout ratio in the fully connected layers (use 0.9 for the temporal net)')
 cmd:option('-fc7_dropout', 0.5, 'Dropout ratio in the fully connected layers (use 0.9 for the temporal net)')
+cmd:option('-num_val_frame_per_video', 25, 'number of frame to be evaluated per videos')
 --
 
 cmd:text()
@@ -96,8 +98,9 @@ local val_loader = VideoData{
     label_file_h5 = paths.concat(opt.coco_data_root, opt.val_label_file_h5),
     index_json = paths.concat(opt.coco_data_root, opt.val_index_json), 
     num_target = opt.num_target, 
-    batch_size = opt.batch_size,
+    batch_size = opt.val_batch_size,
     num_img_channel = opt.num_img_channel,
+    num_val_frame_per_video = opt.num_val_frame_per_video,
     mode = 'test'
 }
 
@@ -173,12 +176,14 @@ local function eval_loss()
     eval:reset()
     
     print(' ==> evaluating ...') 
-    local eval_iters = torch.ceil(opt.num_test_image/opt.batch_size)
+    assert(opt.val_batch_size == 1)
+    local eval_iters = torch.ceil(opt.num_test_image/opt.val_batch_size)
     local sum_loss = 0
     local map = 0
     for iter=1, eval_iters do
         local data = val_loader:getBatch()
         local outputs = model:forward(data.images:cuda())
+        outputs = outputs:mean(1)
         local iter_loss = criterion:forward(outputs, data.labels:cuda())
         sum_loss = sum_loss + iter_loss 
         

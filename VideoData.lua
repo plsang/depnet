@@ -1,5 +1,5 @@
 --[[
-Class to load COCO data in batch mode
+Class to load Video data in batch mode
 ]]--
 
 require 'hdf5'
@@ -60,6 +60,7 @@ function VideoData:__init(opt)
     self.image_width = opt.image_width or 320
     self.num_img_channel = opt.num_img_channel or 3
     self.mode = opt.mode or 'train' -- train/test mode: use to do data augmentation/preprocessing
+    self.num_val_frame_per_video = opt.num_val_frame_per_video or 25
     self.index = torch.Tensor() -- order of video index, to be randomly shuffled every epoch
     
     -- print('Loading image data: ', opt.image_file_h5)
@@ -100,7 +101,11 @@ function VideoData:__init(opt)
 end
 
 function VideoData:getBatch()
-    local video_batch = torch.FloatTensor(self.batch_size, self.num_img_channel, self.crop_size, self.crop_size)
+    local num_image_per_batch = self.batch_size
+    if self.mode == 'test' then
+        num_image_per_batch = self.num_val_frame_per_video
+    end
+    local video_batch = torch.FloatTensor(num_image_per_batch, self.num_img_channel, self.crop_size, self.crop_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
     
     local counter = self.iterator
@@ -110,20 +115,54 @@ function VideoData:getBatch()
         local vid = self.ids[idx]
         local num_frame = self.num_frames[idx]
         
-        if self.num_img_channel == 3 then
-            local frame_idx = torch.random(1, num_frame)
-            -- fetch the image from h5
-            local img = self.video_data:read(vid):partial({frame_idx,frame_idx},{1, self.num_img_channel},
-                {1, self.image_height},{1,self.image_width})
-            -- apply transformation
-            video_batch[i] = preprocess_vgg(img[1], self.mode, self.num_img_channel)
+        if self.mode == 'train' then
+            if self.num_img_channel == 3 then
+                local frame_idx = torch.random(1, num_frame)
+                -- fetch the image from h5
+                local img = self.video_data:read(vid):partial({frame_idx,frame_idx},{1, self.num_img_channel},
+                    {1, self.image_height},{1,self.image_width})
+                -- apply transformation
+                video_batch[i] = preprocess_vgg(img[1], self.mode, self.num_img_channel)
+            else
+                local frame_idx = torch.random(1, num_frame - self.num_img_channel)
+                -- fetch the image from h5
+                local img = self.video_data:read(vid):partial({frame_idx, frame_idx+self.num_img_channel-1},
+                    {1, self.image_height},{1,self.image_width})
+                -- apply transformation
+                video_batch[i] = preprocess_vgg(img:float(), self.mode, self.num_img_channel)
+            end
         else
-            local frame_idx = torch.random(1, num_frame - self.num_img_channel)
-            -- fetch the image from h5
-            local img = self.video_data:read(vid):partial({frame_idx, frame_idx+self.num_img_channel-1},
-                {1, self.image_height},{1,self.image_width})
-            -- apply transformation
-            video_batch[i] = preprocess_vgg(img:float(), self.mode, self.num_img_channel)
+            if self.num_img_channel == 3 then
+                local frame_idx = torch.range(1, num_frame)
+                if num_frame > num_image_per_batch then
+                    frame_idx = torch.linspace(1, num_frame, num_image_per_batch):int()
+                else
+                    video_batch:narrow(1, 1, num_frame)
+                end    
+                
+                for jj=1,frame_idx:size(1) do
+                    -- fetch the image from h5
+                    local img = self.video_data:read(vid):partial({frame_idx[jj],frame_idx[jj]},{1, self.num_img_channel},
+                        {1, self.image_height},{1,self.image_width})
+                    -- apply transformation
+                    video_batch[jj] = preprocess_vgg(img[1], self.mode, self.num_img_channel)
+                end
+            else
+                local frame_idx = torch.range(1, num_frame - self.num_img_channel)
+                if (num_frame - self.num_img_channel) > num_image_per_batch then
+                    frame_idx = torch.linspace(1, num_frame - self.num_img_channel, num_image_per_batch):int()
+                else
+                    video_batch:narrow(1, 1, num_frame - self.num_img_channel)
+                end
+                
+                for jj=1,frame_idx:size(1) do
+                    -- fetch the image from h5
+                    local img = self.video_data:read(vid):partial({frame_idx[jj], frame_idx[jj]+self.num_img_channel-1},
+                        {1, self.image_height},{1,self.image_width})
+                    -- apply transformation
+                    video_batch[jj] = preprocess_vgg(img:float(), self.mode, self.num_img_channel)
+                end
+            end
         end
         
         if self.has_label then
