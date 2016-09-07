@@ -30,7 +30,7 @@ ATTACH_IDS_PY = ./attachIDs2h5.py
 ### DEFAULT PARAMETERS
 
 NDIM?=1000
-VER?=v3
+VER?=v4
 GID?=5
 WD?=0
 LR?=0.00001
@@ -484,3 +484,23 @@ $(MSMIL_FEAT_FILES): %.h5: \
 	python $(ATTACH_VOCAB_PY) $(if $(subst fc8,,$(layer)),--internal,) $(word 3,$^) $@
 	python $(ATTACH_IDS_PY) $(patsubst %.h5,%.json,$<) $@
 
+
+#### eval two stream
+eval_two_stream:
+	mkdir -p $(MODEL_ROOT)/depnet-vgg-twostream/$(VER)
+	LUA_PATH='$(DEPNET_ROOT)/?.lua;;' CUDA_VISIBLE_DEVICES=$(GID) \
+	th $(DEPNET_ROOT)/eval_two_stream.lua -coco_data_root $(MSRVTT_DATA_ROOT) \
+		-val_image_file_h5_s msrvtt_val_preprocessedimages_vgg.h5 \
+		-val_index_json_s msrvtt_val_preprocessedimages_vgg.json \
+		-val_image_file_h5_t msrvtt_val_image_depnet_preprocessedimages_vgg_flow.h5 \
+		-val_index_json_t msrvtt_val_image_depnet_preprocessedimages_vgg_flow.json \
+		-val_label_file_h5 msrvtt_val_captions_myconceptsv3depnetfmt.h5 \
+		-model_type vgg -vocab_file msrvtt_train_captions_myconceptsv3vocab.json \
+		-test_interval -1 -num_test_image -1 -print_log_interval 10 \
+		-test_cp_s $(MODEL_ROOT)/depnet-vgg-myconceptsv3/$(VER)/model_depnet-msrvtt_s.t7 \
+		-test_cp_t $(MODEL_ROOT)/depnet-vgg-myconceptsv3/$(VER)/model_depnet-msrvtt_t.t7 \
+		-model_id $(MODEL_ID)_s -max_epochs $(EP) \
+		-learning_rate $(LR) -weight_decay $(WD) -bias_init $(BIAS) -version $(VER) -debug 1 -num_img_channel 3 -fc6_dropout 0.9 -fc7_dropout 0.9 \
+		2>&1 | tee $(MODEL_ROOT)/depnet-vgg-twostream/$(VER)/model_$(MODEL_ID).log
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_train_captions_$*depnetfmt.h5 2> /dev/null 
+	rm $(MSRVTT_DATA_ROOT)/msrvtt_val_captions_$*depnetfmt.h5 2> /dev/null

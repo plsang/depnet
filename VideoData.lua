@@ -95,7 +95,8 @@ function VideoData:__init(opt)
     end
     
     -- 
-    self:shuffle_videos()
+    self.index = torch.range(1, self.num_videos)
+    if self.mode == 'train' then self:shuffle_videos() end
     self.num_frames = self:countFrames()
     self.label_map = self:getLabelMap()
 end
@@ -107,14 +108,16 @@ function VideoData:getBatch()
     end
     local video_batch = torch.FloatTensor(num_image_per_batch, self.num_img_channel, self.crop_size, self.crop_size)
     local label_batch = torch.ByteTensor(self.batch_size, self.num_target)
+    local id_batch = {}
     
     local counter = self.iterator
     
     for i=1, self.batch_size do
         local idx = self.index[counter]
         local vid = self.ids[idx]
-        local num_frame = self.num_frames[idx]
+        table.insert(id_batch, vid)
         
+        local num_frame = self.num_frames[idx]
         if self.mode == 'train' then
             if self.num_img_channel == 3 then
                 local frame_idx = torch.random(1, num_frame)
@@ -125,6 +128,8 @@ function VideoData:getBatch()
                 video_batch[i] = preprocess_vgg(img[1], self.mode, self.num_img_channel)
             else
                 local frame_idx = torch.random(1, num_frame - self.num_img_channel)
+                -- to make sure the first frame is always the x-component of the flow
+                if frame_idx % 2 == 0 then frame_idx = frame_idx + 1 end
                 -- fetch the image from h5
                 local img = self.video_data:read(vid):partial({frame_idx, frame_idx+self.num_img_channel-1},
                     {1, self.image_height},{1,self.image_width})
@@ -156,8 +161,11 @@ function VideoData:getBatch()
                 end
                 
                 for jj=1,frame_idx:size(1) do
+                    -- to make sure the first frame is always the x-component of the flow
+                    local frame_idx_jj = frame_idx[jj]
+                    if frame_idx_jj % 2 == 0 then frame_idx_jj = frame_idx_jj + 1 end
                     -- fetch the image from h5
-                    local img = self.video_data:read(vid):partial({frame_idx[jj], frame_idx[jj]+self.num_img_channel-1},
+                    local img = self.video_data:read(vid):partial({frame_idx_jj, frame_idx_jj+self.num_img_channel-1},
                         {1, self.image_height},{1,self.image_width})
                     -- apply transformation
                     video_batch[jj] = preprocess_vgg(img:float(), self.mode, self.num_img_channel)
@@ -185,7 +193,7 @@ function VideoData:getBatch()
         if counter > self.num_videos then 
             counter = 1 
             self.epoch = self.epoch + 1
-            self:shuffle_videos()
+            if self.mode == 'train' then self:shuffle_videos() end
         end
     end
     
@@ -194,6 +202,8 @@ function VideoData:getBatch()
     local data = {}
     data.images = video_batch
     data.labels = label_batch
+    data.ids = id_batch
+    
     return data
 end
 
