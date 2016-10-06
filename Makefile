@@ -4,7 +4,8 @@ CLCV_DATA_ROOT = $(CLCV_ROOT)/data
 CLCV_TOOLS_ROOT = $(CLCV_ROOT)/tools
 LOG_ROOT = ./log
 
-MSCOCO_SYM = Microsoft_COCO_20160518
+#MSCOCO_SYM = Microsoft_COCO_20160518
+MSCOCO_SYM = Microsoft_COCO
 MSCOCO_ROOT = $(CLCV_CORPORA_ROOT)/$(MSCOCO_SYM)
 MSCOCO_DATA_ROOT = $(CLCV_DATA_ROOT)/$(MSCOCO_SYM)
 MODEL_ROOT = $(CLCV_DATA_ROOT)/cv_models
@@ -255,4 +256,9 @@ vgg-multitask-test:
 			-val_image_file_h5 data/Microsoft_COCO/mscoco2014_val_preprocessedimages_vgg.h5 \
 			-model_type vgg -test_mode file -version $(VER) \
             -test_cp data/Microsoft_COCO/$(VER)/model_multitask_mt1_vgg_$(OP)_b$(BS)_bias$(BIAS)_lr$(LR)_wd$(WD)_l2_epoch$(EP)_fc8.h5
-            
+           
+
+## Interactive test
+extract_features_interactive:
+	CUDA_VISIBLE_DEVICES=$(GID) th extract_features_interactive.lua \
+		-model_path $(MODEL_ROOT)/depnet-vgg-myconceptsv3/v1/model_depnet-dev_epoch1.t7 

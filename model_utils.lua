@@ -90,10 +90,12 @@ function model_utils.build_vgg_net(num_target)
     model:get(#model).name = 'pool5'
     
     model_utils.build_conv_block(model, 512, 4096, 7, 1, 0, 'fc6', 'relu6')
+    main_model.fc6 = model:get(#model).output
     model:add(nn.Dropout(0.500000))
     model:get(#model).name = 'drop6'
     
     model_utils.build_conv_block(model, 4096, 4096, 1, 1, 0, 'fc7', 'relu7')
+    main_model.fc7 = model:get(#model).output
     model:add(nn.Dropout(0.500000))
     model:get(#model).name = 'drop7'
     
@@ -102,6 +104,7 @@ function model_utils.build_vgg_net(num_target)
     
     model:add(nn.Sigmoid())
     model:get(#model).name = 'sigmoid'
+    main_model.fc8 = model:get(#model).output
     
     main_model:add(model)
     
@@ -682,7 +685,66 @@ function model_utils.load_model(opt)
     collectgarbage() 
     return model
 end
+
+--[[
+load a depnet checkpoint, get model_type from opt
+input: is a depnet checkpoint
+--]]
+function model_utils.load_depnet_model(checkpoint_path)
     
+    local model
+    
+    print('loading checkpoint: ', checkpoint_path)
+    local checkpoint = torch.load(checkpoint_path)
+    
+    local model_opt = {}
+    model_opt.model_type = checkpoint.opt.model_type
+    model_opt.num_target = checkpoint.opt.num_target
+    model_opt.vocab = checkpoint.vocab
+    model_opt.back_end = checkpoint.opt.back_end
+    
+    local model_type = model_opt.model_type
+    local num_target = model_opt.num_target
+    local mil_type
+    
+    print('building model type: ', model_type)
+    if model_type == 'vgg' then
+        model = model_utils.vgg_net({num_target=num_target})
+        model_opt.img_size = 224
+    elseif model_type == 'vggbn' then
+        model = model_utils.finetune_vgg_bn({num_target=num_target})
+        model_opt.img_size = 224
+    elseif model_type == 'milmax' then
+        mil_type = 'milmax'
+        model_opt.img_size = 565
+        model = model_utils.mil_net({num_target=num_target, mil_type=mil_type})
+    elseif model_type == 'milnor' then
+        mil_type = 'milnor'
+        model_opt.img_size = 565
+        model = model_utils.mil_net({num_target=num_target, mil_type=mil_type})
+    elseif model_type == 'milmaxnor' then
+        mil_type = 'milmaxnor'
+        model_opt.img_size = 565
+        model = model_utils.mil_net({num_target=num_target, mil_type=mil_type})
+    else
+        error('Unknown model type!', model_type)
+    end
+    
+    if model_opt.back_end == 'cudnn' then
+        cudnn.convert(model, cudnn)
+    end
+
+    local parameters = model:getParameters()
+    assert(parameters:nElement() == checkpoint.params:nElement(), 
+        'checkpoint network is not compatible with ' .. model_type)
+    
+    print('copying parameters from the checkpoint...')
+    parameters:copy(checkpoint.params)
+    
+    checkpoint = nil
+    return model, model_opt
+end
+
 -- get params (weights + biases indinces) and save them to the config param
 -- used to get invdividual params from each layers, usefule for fine-tuning
 function model_utils.update_param_indices(model, opt, optim_config)
