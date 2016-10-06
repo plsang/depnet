@@ -259,6 +259,6 @@ vgg-multitask-test:
            
 
 ## Interactive test
-extract_features_interactive:
-	CUDA_VISIBLE_DEVICES=$(GID) th extract_features_interactive.lua \
+extract_features_server:
+	CUDA_VISIBLE_DEVICES=$(GID) th extract_features_server.lua \
 		-model_path $(MODEL_ROOT)/depnet-vgg-myconceptsv3/v1/model_depnet-dev_epoch1.t7 
