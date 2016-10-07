@@ -8,9 +8,8 @@ require 'nn'
 require 'cudnn'
 require 'image'
 require 'logging.console'
-local cjson = require 'cjson'
 
-local async = require 'async'
+local cjson = require 'cjson'
 local model_utils = require 'model_utils'
 
 io.stdout:setvbuf 'no'
@@ -124,7 +123,7 @@ while true do
             end
             
             local output_txt = cjson.encode(output_json)
-            io.write(output_txt)
+            io.write(output_txt .. '\n')
             io.stdout:flush()
         else
             logger:error('Error while loading image: ' .. img_path)
