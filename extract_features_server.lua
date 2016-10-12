@@ -7,7 +7,7 @@ and return the image features from that layers
 require 'nn'
 require 'cudnn'
 require 'image'
-require 'logging.console'
+-- require 'logging.console'
 
 local cjson = require 'cjson'
 local model_utils = require 'model_utils'
@@ -26,7 +26,7 @@ cmd:option('-debug', 0, '1 to turn debug on')
 cmd:text()
 local opt = cmd:parse(arg)
 
-local logger = logging.console()
+-- local logger = logging.console()
 
 if opt.debug == 1 then dbg = require 'debugger' end
 
@@ -46,15 +46,19 @@ function preprocess(img, img_size)
     return out
 end
 
-print(opt)
-logger:info('Loading depnet model from checkpoint: ' .. opt.model_path)
+-- print(opt)
+-- logger:info('Loading depnet model from checkpoint: ' .. opt.model_path)
+io.stderr:write('Loading depnet model from checkpoint: ' .. opt.model_path .. '\n')
 local model, model_info = model_utils.load_depnet_model(opt.model_path)
 model:cuda()
 
-logger:info('-- Model type: ' .. model_info.model_type)
-logger:info('-- Image size: ' .. model_info.img_size)
+-- logger:info('-- Model type: ' .. model_info.model_type)
+-- logger:info('-- Image size: ' .. model_info.img_size)
+io.stderr:write('-- Model type: ' .. model_info.model_type .. '\n')
+io.stderr:write('-- Image size: ' .. model_info.img_size .. '\n')
 
-logger:info('Turn evaluation mode on')
+-- logger:info('Turn evaluation mode on')
+io.stderr:write('Turn evaluation mode on' .. '\n')
 model:evaluate()
 
 local timer = torch.Timer()
@@ -93,7 +97,8 @@ end
 Main loop
 Read a path to an image on stdin and output the features to stdout
 --]]
-logger:info('Waiting for a json input. Press Enter to stop!')
+--logger:info('Waiting for a json input. Press Enter to stop!')
+io.stderr:write('Waiting for a json input. Press Enter to stop!\n')
 
 while true do
     local input_text = io.read("*line")
@@ -118,23 +123,28 @@ while true do
                     local output_feat = encode_output(output)
                     output_json[layer] = output_feat
                 else
-                    logger:error('Unknown layer: ' .. layer)
+		   -- logger:error('Unknown layer: ' .. layer)
+		    output_json[layer] = 'Unknown layer'
                 end
             end
-            
+
             local output_txt = cjson.encode(output_json)
             io.write(output_txt .. '\n')
             io.stdout:flush()
         else
-            logger:error('Error while loading image: ' .. img_path)
+            -- logger:error('Error while loading image: ' .. img_path)
+	   io.write('{\"status\": \"Error while loading image\"}\n')
+	   io.stdout:flush()
         end
     else
-        logger:error('Input text is not in json format')
+       -- logger:error('Input text is not in json format')
+       io.write('{"status": "Input text is not in json format"}\n')
+       io.stdout:flush()
     end
 end
 
-logger:info('Elappsed time: ' .. timer:time().real .. '(s)' )
-logger:info('Bye')
-
-
+-- logger:info('Elappsed time: ' .. timer:time().real .. '(s)' )
+-- logger:info('Bye')
+io.stderr:write('Elappsed time: ' .. timer:time().real .. '(s)\n')
+io.stderr:write('Bye\n')
 

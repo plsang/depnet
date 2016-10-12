@@ -6,6 +6,10 @@ require 'nn.SpatialMIL'
 
 local model_utils = {}
 
+function print_stderr(msg)
+   io.stderr:write(msg .. '\n')
+end
+
 function model_utils.load_vgg(opt)
     vgg_model = loadcaffe.load(opt.cnn_proto, opt.cnn_model, opt.back_end)
 
@@ -694,7 +698,8 @@ function model_utils.load_depnet_model(checkpoint_path)
     
     local model
     
-    print('loading checkpoint: ', checkpoint_path)
+    -- print('loading checkpoint: ', checkpoint_path)
+    print_stderr('loading checkpoint: ' .. checkpoint_path)
     local checkpoint = torch.load(checkpoint_path)
     
     local model_opt = {}
@@ -707,7 +712,8 @@ function model_utils.load_depnet_model(checkpoint_path)
     local num_target = model_opt.num_target
     local mil_type
     
-    print('building model type: ', model_type)
+    -- print('building model type: ', model_type)
+    print_stderr('building model type: ' .. model_type)
     if model_type == 'vgg' then
         model = model_utils.vgg_net({num_target=num_target})
         model_opt.img_size = 224
@@ -738,7 +744,7 @@ function model_utils.load_depnet_model(checkpoint_path)
     assert(parameters:nElement() == checkpoint.params:nElement(), 
         'checkpoint network is not compatible with ' .. model_type)
     
-    print('copying parameters from the checkpoint...')
+    print_stderr('copying parameters from the checkpoint...')
     parameters:copy(checkpoint.params)
     
     checkpoint = nil
