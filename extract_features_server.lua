@@ -69,6 +69,7 @@ Load image and do the pre-processing
 local function load_image(img_path, img_size)
     local img = image.load(img_path, 3, 'byte'):float()
     img = preprocess(img, img_size)
+    img = img:view(1, 3, img_size, img_size)
     return img
 end
 
