@@ -120,7 +120,17 @@ while true do
             for ii=1,#layers do
                 layer = layers[ii]
                 if model[layer] then
-                    local output = model[layer]:squeeze():view(-1)
+                    local output = model[layer]
+		     if model_info.model_type == 'milmaxnor' then
+			if layer == 'fc8' then 
+		             -- use milmaxnor (that picks the largest value between the max and its noisy-or propability)
+		             output =  nn.SpatialMIL('milmaxnor'):cuda():forward(output)
+			else
+		             -- use milmax (that only picks the max value)
+		             output =  nn.SpatialMIL('milmax'):cuda():forward(output)
+			end
+                    end
+	             output = output:squeeze():view(-1)
                     local output_feat = encode_output(output)
                     output_json[layer] = output_feat
                 else
