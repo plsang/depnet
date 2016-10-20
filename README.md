@@ -132,5 +132,5 @@ e.g., th extract_features_server.lua -model_path /clcv/resources/data/cv_models/
 - Output format
 ```
 {"fc6":[0,1.076,0.20], "fc7":[0,1.076,0.20],"fc8":[0,1.076,0.20]}
-{"responsemapfc8":{"scores":[[],[],[]]},"index":[]}
+{"responsemapfc8":{"scores":[[],[],[]],"index":[]}}
 ```
