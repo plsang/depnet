@@ -115,6 +115,7 @@ while true do
             model:forward(img:cuda())
             
             local layers = input_json.layers or {}
+            local top_concepts = input_json.top_concepts or 20
             local output_json = {}
             
             for ii=1,#layers do
@@ -125,14 +126,36 @@ while true do
 			if layer == 'fc8' then 
 		             -- use milmaxnor (that picks the largest value between the max and its noisy-or propability)
 		             output =  nn.SpatialMIL('milmaxnor'):cuda():forward(output)
+			elseif layer == 'responsemapfc8' then
+		             local output_mil =  nn.SpatialMIL('milmaxnor'):cuda():forward(output)
+        		     -- outputs should be from the prob layer, select top 
+			     local sorted_outputs, sorted_indices = torch.topk(output_mil, top_concepts, 2, true, true)
+			     local expanded_indices = sorted_indices:reshape(1, top_concepts, 1, 1):repeatTensor(1, 1, 12, 12)
+        
+       			     -- the repsonsemaps output 
+			     local top_index = sorted_indices:view(-1)
+			     local top_output = output:gather(2, expanded_indices):view(top_concepts, -1)
+			     output = {top_index, top_output}
 			else
-		             -- use milmax (that only picks the max value)
-		             output =  nn.SpatialMIL('milmax'):cuda():forward(output)
+		             -- use milmax (that only picks the max value) for the remaining layers (fc6, fc7, etc)
+		             output = nn.SpatialMIL('milmax'):cuda():forward(output)
 			end
                     end
-	             output = output:squeeze():view(-1)
-                    local output_feat = encode_output(output)
-                    output_json[layer] = output_feat
+
+		   if layer == 'responsemapfc8' then
+			local output_featmap = {}
+			output_featmap['index'] = encode_output(output[1])
+			output_featmap['scores'] = {}
+			for jj=1,output[1]:size(1) do
+				local feat_jj = output[2][jj]
+				output_featmap['scores'][jj] = encode_output(feat_jj)
+			end
+                        output_json[layer] = output_featmap
+	           else
+	                output = output:squeeze():view(-1)
+                        local output_feat = encode_output(output)
+                        output_json[layer] = output_feat
+	    	   end
                 else
 		   -- logger:error('Unknown layer: ' .. layer)
 		    output_json[layer] = 'Unknown layer'

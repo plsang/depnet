@@ -109,6 +109,7 @@ function model_utils.build_vgg_net(num_target)
     model:add(nn.Sigmoid())
     model:get(#model).name = 'sigmoid'
     main_model.fc8 = model:get(#model).output
+    main_model.responsemapfc8 = model:get(#model).output
     
     main_model:add(model)
     
