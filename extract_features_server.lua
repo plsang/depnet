@@ -175,6 +175,8 @@ while true do
        io.write('{"status": "Input text is not in json format"}\n')
        io.stdout:flush()
     end
+
+    collectgarbage()
 end
 
 -- logger:info('Elappsed time: ' .. timer:time().real .. '(s)' )
