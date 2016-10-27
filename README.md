@@ -129,8 +129,8 @@ e.g., th extract_features_server.lua -model_path /clcv/resources/data/cv_models/
   - `layers`: in [`fc6`,`fc7`,`fc8`,`responsemapfc8`]
   - `top_concepts`: number of top concepts (default: 20), used for extracting `responsemapfc8`. 
   ```
-  {"filename": "../clcv/resources/corpora/Microsoft_COCO/images/COCO_val2014_000000029594.jpg", "layers":["fc6","fc7","fc8"]}
-  {"filename": "../clcv/resources/corpora/Microsoft_COCO/images/COCO_val2014_000000029594.jpg", "layers":["responsemapfc8"],"top_concepts":20}
+  {"filename": "../clcv/resources/corpora/Microsoft_COCO/images/val2014/COCO_val2014_000000029594.jpg", "layers":["fc6","fc7","fc8"]}
+  {"filename": "../clcv/resources/corpora/Microsoft_COCO/images/val2014/COCO_val2014_000000029594.jpg", "layers":["responsemapfc8"],"top_concepts":20}
   ```
 - Output format
   - For `fc6`,`fc7`,`fc8` layers
