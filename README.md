@@ -30,7 +30,7 @@
   ```
   
 ## Install packages
-This can be done using [this script](https://github.com/mynlp/depnet/blob/clcv/install_deps.sh).
+This can be done using [this script](https://github.com/mynlp/depnet/blob/clcv/install_deps.sh). Otherwise, you can manually install them as follows.
 
 ### Install standard packages
 
