@@ -30,6 +30,7 @@
   ```
   
 ## Install packages
+This can be done using the [this script](https://github.com/mynlp/depnet/blob/clcv/install_deps.sh).
 
 ### Install standard packages
 
@@ -69,4 +70,4 @@
   cd torch-cunn; luarocks make rocks/cunn-scm-1.rockspec
   ```
   
-2. More on [clcv branch](https://github.com/mynlp/depnet/tree/clcv)
+More on [clcv branch](https://github.com/mynlp/depnet/tree/clcv)
