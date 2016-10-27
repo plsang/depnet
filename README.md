@@ -1,4 +1,5 @@
 # Installation
+Tested on AMI Glassmoon-depnet
 
 ## Update CuDNN V5.1
   - Get CuDNN v5.1 from /works/csisv15/plsang/cudnn/cudnn-7.5-linux-x64-v5.1.tgz
@@ -13,7 +14,7 @@
   ```
   
 ## Install Torch7
-  - Install torch from scratch
+  - Install torch from scratch (it would be better to remove old Torch environment first).
   
   ```bash
   git clone https://github.com/plsang/distro.git ~/torch --recursive
