@@ -1,56 +1,5 @@
-## Installation
-  * Install Torch7
-  
-  ```
-  git clone https://github.com/torch/distro.git ~/torch --recursive
-  cd ~/torch; bash install-deps;
-  ./install.sh
-  ```
-  * Install standard packages
-  
-  ```
-  luarocks install nn
-  luarocks install nngraph
-  luarocks install image
-  luarocks install cutorch
-  luarocks install cunn
-  luarocks install loadcaffe
-  luarocks install lualogging
-  ```
-  * Install torch-hdf5
-  
-  ```
-  git clone https://github.com/deepmind/torch-hdf5
-  cd torch-hdf5; luarocks make hdf5-0-0.rockspec
-  ```
-  * Install cjson
-  
-  ```
-  wget http://www.kyne.com.au/~mark/software/download/lua-cjson-2.1.0.tar.gz
-  tar -xvf lua-cjson-2.1.0.tar.gz
-  cd lua-cjson-2.1.0; luarocks make
-  ```
-  * Install debugger 
-  
-  ```
-  git clone https://github.com/slembcke/debugger.lua.git torch-debugger
-  cd torch-debugger; luarocks make
-  ```
-  * Install customized torch-nn
-  
-  ```
-  git clone https://github.com/plsang/nn.git torch-nn
-  cd torch-nn; luarocks make rocks/nn-scm-1.rockspec
-  ```
-  * Install customized torch-cunn
-  
-  ```
-  git clone https://github.com/plsang/cunn.git torch-cunn
-  cd torch-cunn; luarocks make rocks/cunn-scm-1.rockspec
-  ```
-  * The required packages can be installed using the `install_deps.sh` script.
-  
-## Preprocessing
+
+# Preprocessing
   * Check out the clcv branch
   * Update CLCV_ROOT=/path/to/the/clcv/`resources`/directory in the Makefile
   * Preprocessing:
@@ -61,7 +10,7 @@
   make vgg16-model   # download the standard VGG16 net
   ```
 
-## Training models
+# Training models
   * Training Options
     * GID: [0] specify the GPU device ID (default: 0)
     * VER: [v1] version name (e.g., v1), each models will be saved in a subdirectory specified by this version
@@ -90,7 +39,7 @@
   ```
   * Multitask models
 
-## Extracting features
+# Extracting features
   * VGG models
   ```
   make vgg-extract-fc8
@@ -104,7 +53,7 @@
     * The first K values are the indexes of the top K concepts (corresponding to its index in the vocabulary)
     * The remaining is the faltten array of the reponse maps K x 12 x 12 (flattend in row major order)
    
-## Testing the models
+# Testing the models
   
   After extracting features from the fc8 layer, we can test the performance of the model on the COCO val set.
  
@@ -117,13 +66,14 @@
   make msmil-test-models
   ```
 
-## Extract feature interactively
+# Extract feature interactively
 
 - Start the server 
-```
-th extract_features_server.lua -model_path <path_to_a_depnet_model>
-e.g., th extract_features_server.lua -model_path /clcv/resources/data/cv_models/depnet-vgg-myconceptsv3/v1/model_depnet-dev_epoch1.t7
-```
+  
+  ```
+  th extract_features_server.lua -model_path <path_to_a_depnet_model>
+  e.g., th extract_features_server.lua -model_path /clcv/resources/data/cv_models/depnet-vgg-myconceptsv3/v1/model_depnet-dev_epoch1.t7
+  ```
 - Input format
   - `filename`: path to the image file
   - `layers`: in [`fc6`,`fc7`,`fc8`,`responsemapfc8`]
