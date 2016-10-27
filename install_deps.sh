@@ -1,8 +1,15 @@
-luarocks install nn
+#git clone https://github.com/plsang/distro.git ~/torch --recursive
+#cd ~/torch; bash install-deps; ./install.sh
+
+git clone https://github.com/plsang/nn.git torch-nn
+cd torch-nn && luarocks make rocks/nn-scm-1.rockspec && cd - && rm -rf torch-nn
+
+git clone https://github.com/plsang/cunn.git torch-cunn
+cd torch-cunn && luarocks make rocks/cunn-scm-1.rockspec && cd - && rm -rf torch-cunn
+
 luarocks install nngraph
 luarocks install image
 luarocks install cutorch
-luarocks install cunn
 luarocks install loadcaffe
 luarocks install lualogging
 
@@ -15,10 +22,4 @@ cd lua-cjson-2.1.0 && luarocks make && cd - && rm -rf lua-cjson-2.1.0
 
 git clone https://github.com/slembcke/debugger.lua.git torch-debugger
 cd torch-debugger && luarocks make && cd - && rm -rf torch-debugger
-
-git clone https://github.com/plsang/nn.git torch-nn
-cd torch-nn && luarocks make rocks/nn-scm-1.rockspec && cd - && rm -rf torch-nn
-
-git clone https://github.com/plsang/cunn.git torch-cunn
-cd torch-cunn && luarocks make rocks/cunn-scm-1.rockspec && cd - && rm -rf torch-cunn
 
